@@ -9,14 +9,14 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let timer_service = Arc::new(TimerService::new());
-    let stats_service = Arc::new(StatsService::new());
+    let timer = Arc::new(TimerService::new());
+    let stats = Arc::new(StatsService::new());
 
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .manage(timer_service.clone())
-        .manage(stats_service.clone())
+        .manage(timer.clone())
+        .manage(stats.clone())
         .setup(move |app| {
             // Auto-open DevTools in debug builds for the settings window
             #[cfg(debug_assertions)]
@@ -27,8 +27,8 @@ pub fn run() {
             }
 
             // 启动后台计时线程
-            let timer_for_thread = timer_service.clone();
-            let stats_for_thread = stats_service.clone();
+            let timer_for_thread = timer.clone();
+            let stats_for_thread = stats.clone();
             let handle = app.handle().clone();
 
             std::thread::spawn(move || {
