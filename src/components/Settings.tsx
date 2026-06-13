@@ -6,40 +6,53 @@ import {
   type WorkSchedule,
 } from "../services/tauri-api";
 import StatsPanel from "./StatsPanel";
+import { useI18n } from "../i18n";
+import type { LocaleKey } from "../i18n/locales/zh-CN";
 
 interface Preset {
-  name: string;
+  nameKey: LocaleKey;
+  descKey: LocaleKey;
   emoji: string;
   interval: number;
   duration: number;
-  desc: string;
 }
 
 const PRESETS: Preset[] = [
   {
-    name: "佛系",
+    nameKey: "preset_relaxed",
+    descKey: "preset_relaxed_desc",
     emoji: "🧘",
     interval: 60,
     duration: 60,
-    desc: "每60分钟提醒，60秒铺满",
   },
   {
-    name: "标准",
+    nameKey: "preset_standard",
+    descKey: "preset_standard_desc",
     emoji: "⚡",
     interval: 30,
     duration: 30,
-    desc: "每30分钟提醒，30秒铺满",
   },
   {
-    name: "严格",
+    nameKey: "preset_strict",
+    descKey: "preset_strict_desc",
     emoji: "🔥",
     interval: 15,
     duration: 15,
-    desc: "每15分钟提醒，15秒铺满",
   },
 ];
 
+const DAY_KEYS: LocaleKey[] = [
+  "day_mon",
+  "day_tue",
+  "day_wed",
+  "day_thu",
+  "day_fri",
+  "day_sat",
+  "day_sun",
+];
+
 export default function Settings() {
+  const { t, toggleLocale } = useI18n();
   const [settings, setSettings] = useState<AppSettings>({
     remind_interval_minutes: 30,
     fill_duration_seconds: 30,
@@ -66,7 +79,7 @@ export default function Settings() {
             p.duration === s.fill_duration_seconds
         );
         if (match) {
-          setActivePreset(match.name);
+          setActivePreset(match.nameKey);
         } else {
           setActivePreset(null);
           setShowCustom(true);
@@ -91,7 +104,7 @@ export default function Settings() {
 
   const handlePresetClick = useCallback(
     (preset: Preset) => {
-      setActivePreset(preset.name);
+      setActivePreset(preset.nameKey);
       setShowCustom(false);
       setSettings((prev) => ({
         ...prev,
@@ -159,34 +172,52 @@ export default function Settings() {
         overflowY: "auto",
       }}
     >
-      <h1
-        style={{
-          fontSize: 24,
-          fontWeight: 700,
-          marginBottom: 24,
-          color: "#fff",
-        }}
-      >
-        🕳️ BlackHole 设置
-      </h1>
+      {/* Title + Language Toggle */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+        <h1
+          style={{
+            fontSize: 24,
+            fontWeight: 700,
+            color: "#fff",
+            margin: 0,
+          }}
+        >
+          {t("settings_title")}
+        </h1>
+        <button
+          onClick={toggleLocale}
+          style={{
+            padding: "4px 12px",
+            background: "#2a2a3e",
+            color: "#aaa",
+            border: "1px solid #3a3a4e",
+            borderRadius: 6,
+            fontSize: 12,
+            cursor: "pointer",
+            transition: "all 0.2s",
+          }}
+        >
+          {t("lang_switch")}
+        </button>
+      </div>
 
       {/* Preset Cards */}
       <div
         style={{
-          display: "flex",
-          gap: 10,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: 8,
           marginBottom: 20,
         }}
       >
         {PRESETS.map((preset) => {
-          const isActive = activePreset === preset.name;
+          const isActive = activePreset === preset.nameKey;
           return (
             <div
-              key={preset.name}
+              key={preset.nameKey}
               onClick={() => handlePresetClick(preset)}
               style={{
-                flex: 1,
-                padding: "14px 8px",
+                padding: "12px 6px",
                 borderRadius: 10,
                 border: `2px solid ${isActive ? "#ff8c00" : "#2a2a3e"}`,
                 background: isActive
@@ -195,17 +226,22 @@ export default function Settings() {
                 cursor: "pointer",
                 textAlign: "center",
                 transition: "all 0.2s",
+                minWidth: 0,
+                overflow: "hidden",
               }}
             >
-              <div style={{ fontSize: 28, marginBottom: 4 }}>{preset.emoji}</div>
+              <div style={{ fontSize: 24, marginBottom: 2 }}>{preset.emoji}</div>
               <div
                 style={{
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: 700,
                   color: isActive ? "#ff8c00" : "#ccc",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
                 }}
               >
-                {preset.name}
+                {t(preset.nameKey)}
               </div>
               <div
                 style={{
@@ -213,9 +249,13 @@ export default function Settings() {
                   color: "#888",
                   marginTop: 2,
                   lineHeight: 1.3,
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
                 }}
               >
-                {preset.desc}
+                {t(preset.descKey)}
               </div>
             </div>
           );
@@ -239,7 +279,7 @@ export default function Settings() {
         <span style={{ transition: "transform 0.2s", display: "inline-block", transform: showCustom ? "rotate(90deg)" : "rotate(0deg)" }}>
           ▸
         </span>
-        自定义设置
+        {t("custom_settings")}
       </div>
 
       {/* Custom sliders */}
@@ -254,7 +294,7 @@ export default function Settings() {
                 marginBottom: 8,
               }}
             >
-              久坐提醒间隔
+              {t("remind_interval")}
             </label>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <input
@@ -274,7 +314,7 @@ export default function Settings() {
                   textAlign: "right",
                 }}
               >
-                {settings.remind_interval_minutes} 分钟
+                {settings.remind_interval_minutes} {t("minutes")}
               </span>
             </div>
           </div>
@@ -288,7 +328,7 @@ export default function Settings() {
                 marginBottom: 8,
               }}
             >
-              黑洞铺满时间
+              {t("fill_duration")}
             </label>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <input
@@ -308,7 +348,7 @@ export default function Settings() {
                   textAlign: "right",
                 }}
               >
-                {settings.fill_duration_seconds} 秒
+                {settings.fill_duration_seconds} {t("seconds")}
               </span>
             </div>
           </div>
@@ -332,7 +372,7 @@ export default function Settings() {
           <span style={{ transition: "transform 0.2s", display: "inline-block", transform: showSchedule ? "rotate(90deg)" : "rotate(0deg)" }}>
             ▸
           </span>
-          工作时间表
+          {t("work_schedule")}
         </div>
 
         {showSchedule && (
@@ -353,7 +393,7 @@ export default function Settings() {
                 marginBottom: 14,
               }}
             >
-              <span style={{ fontSize: 14, color: "#ccc" }}>启用工作时间</span>
+              <span style={{ fontSize: 14, color: "#ccc" }}>{t("enable_work_time")}</span>
               <div
                 onClick={() =>
                   setSchedule((prev) => ({
@@ -397,7 +437,7 @@ export default function Settings() {
                 >
                   <div style={{ flex: 1 }}>
                     <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>
-                      开始时间
+                      {t("start_time")}
                     </label>
                     <input
                       type="time"
@@ -422,7 +462,7 @@ export default function Settings() {
                   </div>
                   <div style={{ flex: 1 }}>
                     <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>
-                      结束时间
+                      {t("end_time")}
                     </label>
                     <input
                       type="time"
@@ -449,37 +489,35 @@ export default function Settings() {
 
                 <div>
                   <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 6 }}>
-                    活跃日期
+                    {t("active_days")}
                   </label>
                   <div style={{ display: "flex", gap: 6 }}>
-                    {["一", "二", "三", "四", "五", "六", "日"].map(
-                      (label, i) => {
-                        const day = i + 1;
-                        const active = schedule.enabled_days.includes(day);
-                        return (
-                          <div
-                            key={day}
-                            onClick={() => toggleDay(day)}
-                            style={{
-                              width: 32,
-                              height: 32,
-                              borderRadius: "50%",
-                              background: active ? "#ff8c00" : "#2a2a3e",
-                              color: active ? "#fff" : "#666",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 12,
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              transition: "all 0.2s",
-                            }}
-                          >
-                            {label}
-                          </div>
-                        );
-                      }
-                    )}
+                    {DAY_KEYS.map((dayKey, i) => {
+                      const day = i + 1;
+                      const active = schedule.enabled_days.includes(day);
+                      return (
+                        <div
+                          key={day}
+                          onClick={() => toggleDay(day)}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: "50%",
+                            background: active ? "#ff8c00" : "#2a2a3e",
+                            color: active ? "#fff" : "#666",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                          }}
+                        >
+                          {t(dayKey)}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </>
@@ -504,7 +542,7 @@ export default function Settings() {
             }}
           >
             <div style={{ fontSize: 13, color: "#ff6666", marginBottom: 8 }}>
-              确定要重置所有数据？此操作不可撤销
+              {t("reset_confirm")}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button
@@ -521,7 +559,7 @@ export default function Settings() {
                   cursor: "pointer",
                 }}
               >
-                确认重置
+                {t("confirm_reset")}
               </button>
               <button
                 onClick={() => setShowResetConfirm(false)}
@@ -536,7 +574,7 @@ export default function Settings() {
                   cursor: "pointer",
                 }}
               >
-                取消
+                {t("cancel")}
               </button>
             </div>
           </div>
@@ -555,7 +593,7 @@ export default function Settings() {
               transition: "all 0.2s",
             }}
           >
-            🗑️ 重置所有数据
+            {t("reset_all")}
           </button>
         )}
       </div>

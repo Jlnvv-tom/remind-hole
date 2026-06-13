@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useI18n } from "../i18n";
 
 interface Planet {
   id: number;
@@ -30,6 +31,7 @@ export default function EscapeGame({
   onSlowDown,
   onAllCollected,
 }: EscapeGameProps) {
+  const { t } = useI18n();
   const [planets, setPlanets] = useState<Planet[]>([]);
   const [bonusCooldown, setBonusCooldown] = useState(0);
   const animRef = useRef(0);
@@ -159,7 +161,7 @@ export default function EscapeGame({
             zIndex: 25,
           }}
         >
-          🪐 收集星球延缓黑洞 ({3 - activePlanets.length}/3)
+          {t("collect_planets", { collected: String(3 - activePlanets.length) })}
         </div>
       )}
 
@@ -180,7 +182,7 @@ export default function EscapeGame({
             zIndex: 25,
           }}
         >
-          ✨ 奖励冷却 -{bonusCooldown}s
+          {t("bonus_cooldown", { seconds: String(bonusCooldown) })}
         </div>
       )}
     </>

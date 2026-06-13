@@ -1,40 +1,43 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { BlackHoleRenderer } from "../utils/blackhole-renderer";
 import { completeOnboarding, updateSettings } from "../services/tauri-api";
+import { useI18n } from "../i18n";
+import type { LocaleKey } from "../i18n/locales/zh-CN";
 
 interface Preset {
-  name: string;
+  nameKey: LocaleKey;
+  descKey: LocaleKey;
   emoji: string;
   interval: number;
   duration: number;
-  desc: string;
 }
 
 const PRESETS: Preset[] = [
   {
-    name: "佛系",
+    nameKey: "preset_relaxed",
+    descKey: "onboarding_relaxed_desc",
     emoji: "🧘",
     interval: 60,
     duration: 60,
-    desc: "每60分钟提醒，60秒铺满",
   },
   {
-    name: "标准",
+    nameKey: "preset_standard",
+    descKey: "onboarding_standard_desc",
     emoji: "⚡",
     interval: 30,
     duration: 30,
-    desc: "每30分钟提醒，30秒铺满",
   },
   {
-    name: "严格",
+    nameKey: "preset_strict",
+    descKey: "onboarding_strict_desc",
     emoji: "🔥",
     interval: 15,
     duration: 15,
-    desc: "每15分钟提醒，15秒铺满",
   },
 ];
 
 export default function Onboarding() {
+  const { t } = useI18n();
   const [step, setStep] = useState(1);
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -76,7 +79,7 @@ export default function Onboarding() {
 
   const handlePresetSelect = useCallback(
     async (preset: Preset) => {
-      setSelectedPreset(preset.name);
+      setSelectedPreset(preset.nameKey);
       try {
         await updateSettings(preset.interval, preset.duration);
       } catch {
@@ -138,7 +141,7 @@ export default function Onboarding() {
               textShadow: "0 0 30px rgba(255, 140, 0, 0.4)",
             }}
           >
-            🕳️ 欢迎来到 BlackHole
+            {t("onboarding_title")}
           </h1>
           <p
             style={{
@@ -147,11 +150,10 @@ export default function Onboarding() {
               maxWidth: 400,
               lineHeight: 1.6,
               marginBottom: 30,
+              whiteSpace: "pre-line",
             }}
           >
-            久坐时黑洞会慢慢吞噬你的屏幕，
-            <br />
-            提醒你起来活动一下
+            {t("onboarding_desc")}
           </p>
           <button
             onClick={() => setStep(2)}
@@ -166,7 +168,7 @@ export default function Onboarding() {
               cursor: "pointer",
             }}
           >
-            下一步 →
+            {t("next_step")}
           </button>
         </div>
       </div>
@@ -198,18 +200,18 @@ export default function Onboarding() {
             marginBottom: 8,
           }}
         >
-          选择你的模式
+          {t("choose_mode")}
         </h2>
         <p style={{ fontSize: 14, color: "#888", marginBottom: 30 }}>
-          随时可以在设置中修改
+          {t("can_change_later")}
         </p>
 
         <div style={{ display: "flex", gap: 14, marginBottom: 30 }}>
           {PRESETS.map((preset) => {
-            const isActive = selectedPreset === preset.name;
+            const isActive = selectedPreset === preset.nameKey;
             return (
               <div
-                key={preset.name}
+                key={preset.nameKey}
                 onClick={() => handlePresetSelect(preset)}
                 style={{
                   padding: "20px 16px",
@@ -235,10 +237,10 @@ export default function Onboarding() {
                     marginBottom: 4,
                   }}
                 >
-                  {preset.name}
+                  {t(preset.nameKey)}
                 </div>
                 <div style={{ fontSize: 11, color: "#888", lineHeight: 1.4 }}>
-                  {preset.desc}
+                  {t(preset.descKey)}
                 </div>
               </div>
             );
@@ -260,7 +262,7 @@ export default function Onboarding() {
             transition: "all 0.2s",
           }}
         >
-          开始使用
+          {t("start_using")}
         </button>
       </div>
     );
@@ -292,12 +294,10 @@ export default function Onboarding() {
           marginBottom: 8,
         }}
       >
-        一切就绪！
+        {t("all_set")}
       </h2>
-      <p style={{ fontSize: 14, color: "#888", textAlign: "center", lineHeight: 1.6 }}>
-        BlackHole 会在后台默默守护你的健康
-        <br />
-        久坐时它会温柔地提醒你起身活动
+      <p style={{ fontSize: 14, color: "#888", textAlign: "center", lineHeight: 1.6, whiteSpace: "pre-line" }}>
+        {t("all_set_desc")}
       </p>
     </div>
   );

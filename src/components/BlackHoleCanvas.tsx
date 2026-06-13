@@ -9,6 +9,7 @@ import {
   getCountdown,
   getCooldown,
 } from "../services/tauri-api";
+import { useI18n } from "../i18n";
 
 export default function BlackHoleCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -17,6 +18,7 @@ export default function BlackHoleCanvas() {
   const [canClose, setCanClose] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const activityThrottleRef = useRef(0);
+  const { t } = useI18n();
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -115,7 +117,7 @@ export default function BlackHoleCanvas() {
     countdown > 0
       ? formatCountdown(countdown)
       : countdown === 0
-        ? "已被吞噬！"
+        ? t("devoured")
         : "";
 
   return (
@@ -182,7 +184,7 @@ export default function BlackHoleCanvas() {
             animation: "fadeInOut 2s ease-in-out infinite",
           }}
         >
-          点击关闭
+          {t("click_to_close")}
         </div>
       )}
 
@@ -199,7 +201,7 @@ export default function BlackHoleCanvas() {
             pointerEvents: "none",
           }}
         >
-          请离开电脑 30 秒...
+          {t("leave_computer")}
         </div>
       )}
 
@@ -220,7 +222,7 @@ export default function BlackHoleCanvas() {
             pointerEvents: "none",
           }}
         >
-          冷却中，还需等待 {Math.ceil(cooldown)} 秒
+          {t("cooling_down", { seconds: Math.ceil(cooldown) })}
         </div>
       )}
 
