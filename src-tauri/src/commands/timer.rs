@@ -1,6 +1,7 @@
 use crate::services::stats_service::StatsService;
 use crate::services::timer_service::TimerService;
 use serde::Serialize;
+use std::sync::Arc;
 use tauri::State;
 
 #[derive(Serialize)]
@@ -18,7 +19,7 @@ pub struct TimerStatus {
 }
 
 #[tauri::command]
-pub fn get_timer_status(timer: State<'_, TimerService>) -> TimerStatus {
+pub fn get_timer_status(timer: State<'_, Arc<TimerService>>) -> TimerStatus {
     let alert = timer.get_alert_level();
     TimerStatus {
         elapsed: timer.elapsed_seconds(),
@@ -39,7 +40,7 @@ pub fn get_timer_status(timer: State<'_, TimerService>) -> TimerStatus {
 }
 
 #[tauri::command]
-pub fn get_blackhole_progress(timer: State<'_, TimerService>) -> f64 {
+pub fn get_blackhole_progress(timer: State<'_, Arc<TimerService>>) -> f64 {
     if timer.should_show_blackhole() {
         timer.blackhole_progress()
     } else {
@@ -49,8 +50,8 @@ pub fn get_blackhole_progress(timer: State<'_, TimerService>) -> f64 {
 
 #[tauri::command]
 pub fn dismiss_blackhole(
-    timer: State<'_, TimerService>,
-    stats: State<'_, StatsService>,
+    timer: State<'_, Arc<TimerService>>,
+    stats: State<'_, Arc<StatsService>>,
 ) -> Result<(), String> {
     // 记录忽略
     timer.dismiss_with_ignore();
@@ -59,45 +60,45 @@ pub fn dismiss_blackhole(
 }
 
 #[tauri::command]
-pub fn report_activity(timer: State<'_, TimerService>) {
+pub fn report_activity(timer: State<'_, Arc<TimerService>>) {
     timer.report_activity();
 }
 
 #[tauri::command]
-pub fn can_dismiss(timer: State<'_, TimerService>) -> bool {
+pub fn can_dismiss(timer: State<'_, Arc<TimerService>>) -> bool {
     timer.can_dismiss()
 }
 
 #[tauri::command]
-pub fn get_alert_level(timer: State<'_, TimerService>) -> String {
+pub fn get_alert_level(timer: State<'_, Arc<TimerService>>) -> String {
     let level = timer.get_alert_level();
     format!("{:?}", level).to_lowercase()
 }
 
 #[tauri::command]
-pub fn get_countdown(timer: State<'_, TimerService>) -> u64 {
+pub fn get_countdown(timer: State<'_, Arc<TimerService>>) -> u64 {
     timer.seconds_until_full()
 }
 
 #[tauri::command]
-pub fn get_cooldown(timer: State<'_, TimerService>) -> u64 {
+pub fn get_cooldown(timer: State<'_, Arc<TimerService>>) -> u64 {
     timer.get_cooldown_seconds()
 }
 
 #[tauri::command]
-pub fn start_timer(timer: State<'_, TimerService>) {
+pub fn start_timer(timer: State<'_, Arc<TimerService>>) {
     timer.start();
 }
 
 #[tauri::command]
-pub fn pause_timer(timer: State<'_, TimerService>) {
+pub fn pause_timer(timer: State<'_, Arc<TimerService>>) {
     timer.pause();
 }
 
 #[tauri::command]
 pub fn reset_timer(
-    timer: State<'_, TimerService>,
-    stats: State<'_, StatsService>,
+    timer: State<'_, Arc<TimerService>>,
+    stats: State<'_, Arc<StatsService>>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     timer.reset();

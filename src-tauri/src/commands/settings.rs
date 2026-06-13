@@ -1,6 +1,7 @@
 use crate::services::timer_service::{Preset, TimerService, WorkSchedule};
 use crate::services::stats_service::StatsService;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tauri::State;
 
 #[derive(Serialize)]
@@ -20,7 +21,7 @@ pub struct UpdateSettingsRequest {
 }
 
 #[tauri::command]
-pub fn get_settings(timer: State<'_, TimerService>) -> SettingsResponse {
+pub fn get_settings(timer: State<'_, Arc<TimerService>>) -> SettingsResponse {
     let (remind_interval, fill_duration, preset, work_schedule) = timer.get_settings();
     SettingsResponse {
         remind_interval_minutes: remind_interval / 60,
@@ -32,7 +33,7 @@ pub fn get_settings(timer: State<'_, TimerService>) -> SettingsResponse {
 
 #[tauri::command]
 pub fn update_settings(
-    timer: State<'_, TimerService>,
+    timer: State<'_, Arc<TimerService>>,
     request: UpdateSettingsRequest,
 ) -> Result<(), String> {
     let (current_interval, current_fill, current_preset, current_schedule) = timer.get_settings();
@@ -67,7 +68,7 @@ pub fn update_settings(
 }
 
 #[tauri::command]
-pub fn apply_preset(timer: State<'_, TimerService>, preset: String) -> Result<(), String> {
+pub fn apply_preset(timer: State<'_, Arc<TimerService>>, preset: String) -> Result<(), String> {
     let preset = match preset.as_str() {
         "relaxed" => Preset::Relaxed,
         "standard" => Preset::Standard,
@@ -81,14 +82,14 @@ pub fn apply_preset(timer: State<'_, TimerService>, preset: String) -> Result<()
 // --- Stats commands ---
 
 #[tauri::command]
-pub fn get_stats(stats: State<'_, StatsService>) -> crate::services::stats_service::StatsState {
+pub fn get_stats(stats: State<'_, Arc<StatsService>>) -> crate::services::stats_service::StatsState {
     stats.get_stats()
 }
 
 #[tauri::command]
 pub fn record_stand_up(
-    timer: State<'_, TimerService>,
-    stats: State<'_, StatsService>,
+    timer: State<'_, Arc<TimerService>>,
+    stats: State<'_, Arc<StatsService>>,
 ) -> Result<(), String> {
     timer.reset();
     stats.record_stand_up();
