@@ -5,7 +5,6 @@ import {
   type AppSettings,
   type WorkSchedule,
 } from "../services/tauri-api";
-import StatsPanel from "./StatsPanel";
 import { useI18n } from "../i18n";
 import type { LocaleKey } from "../i18n/locales/zh-CN";
 
@@ -526,11 +525,8 @@ export default function Settings() {
         )}
       </div>
 
-      {/* Stats Panel */}
-      <StatsPanel />
-
       {/* Reset button */}
-      <div style={{ marginTop: "auto", paddingTop: 20 }}>
+      <div style={{ paddingTop: 20, paddingBottom: 12 }}>
         {showResetConfirm ? (
           <div
             style={{

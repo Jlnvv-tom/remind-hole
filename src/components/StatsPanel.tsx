@@ -41,7 +41,7 @@ export default function StatsPanel() {
   };
 
   return (
-    <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid #2a2a3e" }}>
+    <div style={{ paddingTop: 4 }}>
       <h3 style={{ fontSize: 14, color: "#888", marginBottom: 12, fontWeight: 600 }}>
         {t("stats_title")}
       </h3>

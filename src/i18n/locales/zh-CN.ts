@@ -62,6 +62,28 @@ const zhCN = {
   // EscapeGame
   collect_planets: "🪐 收集星球延缓黑洞 ({collected}/3)",
   bonus_cooldown: "✨ 奖励冷却 -{seconds}s",
+
+  // Navigation
+  nav_dashboard: "仪表盘",
+  nav_settings: "设置",
+  nav_stats: "统计",
+
+  // Dashboard
+  dashboard_title: "久坐计时",
+  dashboard_status_safe: "状态安全",
+  dashboard_status_warning: "注意久坐",
+  dashboard_status_danger: "即将触发",
+  dashboard_status_active: "黑洞已启动",
+  dashboard_next_remind: "下次提醒",
+  dashboard_elapsed: "已坐时长",
+  dashboard_progress: "进度",
+  dashboard_alert_green: "安全",
+  dashboard_alert_yellow: "预警",
+  dashboard_alert_red: "危险",
+  dashboard_alert_blackhole: "黑洞",
+  dashboard_no_activity: "暂无活动",
+  dashboard_minute_short: "分",
+  dashboard_second_short: "秒",
 };
 
 export default zhCN;

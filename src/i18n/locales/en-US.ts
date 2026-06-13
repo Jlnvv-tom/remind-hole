@@ -64,6 +64,28 @@ const enUS: Record<LocaleKey, string> = {
   // EscapeGame
   collect_planets: "🪐 Collect planets to slow the black hole ({collected}/3)",
   bonus_cooldown: "✨ Bonus cooldown -{seconds}s",
+
+  // Navigation
+  nav_dashboard: "Dashboard",
+  nav_settings: "Settings",
+  nav_stats: "Stats",
+
+  // Dashboard
+  dashboard_title: "Sedentary Timer",
+  dashboard_status_safe: "All Good",
+  dashboard_status_warning: "Sitting Too Long",
+  dashboard_status_danger: "Black Hole Incoming",
+  dashboard_status_active: "Black Hole Active",
+  dashboard_next_remind: "Next Reminder",
+  dashboard_elapsed: "Time Seated",
+  dashboard_progress: "Progress",
+  dashboard_alert_green: "Safe",
+  dashboard_alert_yellow: "Warning",
+  dashboard_alert_red: "Danger",
+  dashboard_alert_blackhole: "Black Hole",
+  dashboard_no_activity: "No activity",
+  dashboard_minute_short: "m",
+  dashboard_second_short: "s",
 };
 
 export default enUS;

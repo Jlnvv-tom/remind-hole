@@ -10,6 +10,11 @@ export interface TimerStatus {
   elapsed: number;
   should_show: boolean;
   progress: number;
+  alert_level: string;
+  seconds_until_full: number;
+  can_dismiss: boolean;
+  cooldown_remaining: number;
+  ignore_count: number;
 }
 
 export interface Stats {

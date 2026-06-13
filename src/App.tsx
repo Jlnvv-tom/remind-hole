@@ -1,55 +1,62 @@
 import { useEffect, useState } from "react";
 import BlackHoleCanvas from "./components/BlackHoleCanvas";
 import Settings from "./components/Settings";
+import Dashboard from "./components/Dashboard";
+import StatsPanel from "./components/StatsPanel";
 import Onboarding from "./components/Onboarding";
 import PreviewCanvas from "./components/PreviewCanvas";
 import AlertOverlay from "./components/AlertOverlay";
-import {
-  isFirstRun,
-  getAlertLevel,
-} from "./services/tauri-api";
+import { isFirstRun, getAlertLevel } from "./services/tauri-api";
+import { useI18n } from "./i18n";
 
-function App() {
-  const [page, setPage] = useState<"blackhole" | "settings" | "onboarding">("blackhole");
+type WindowRole = "main" | "blackhole" | "preview";
+type MainPage = "dashboard" | "settings" | "stats";
+
+export default function App() {
+  const [windowRole, setWindowRole] = useState<WindowRole>("main");
+  const [mainPage, setMainPage] = useState<MainPage>("dashboard");
   const [alertLevel, setAlertLevel] = useState<string>("green");
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const { t } = useI18n();
 
+  // Determine which Tauri window we're in
   useEffect(() => {
-    // Determine page by URL hash / window label
     const hash = window.location.hash;
     if (hash === "#settings") {
-      setPage("settings");
+      setWindowRole("main");
     } else if (hash === "#blackhole") {
-      setPage("blackhole");
+      setWindowRole("blackhole");
     } else {
-      import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
-        const label = getCurrentWindow().label;
-        if (label === "settings") {
-          setPage("settings");
-        } else if (label === "preview") {
-          setPage("blackhole"); // preview window reuses blackhole page but smaller
-        } else {
-          setPage("blackhole");
-        }
-      }).catch(() => {
-        setPage("blackhole");
-      });
+      import("@tauri-apps/api/window")
+        .then(({ getCurrentWindow }) => {
+          const label = getCurrentWindow().label;
+          if (label === "blackhole") {
+            setWindowRole("blackhole");
+          } else if (label === "preview") {
+            setWindowRole("preview");
+          } else {
+            setWindowRole("main");
+          }
+        })
+        .catch(() => {
+          setWindowRole("main");
+        });
     }
   }, []);
 
-  // Check first run (only for settings window)
+  // Check first run (main window only)
   useEffect(() => {
-    if (page !== "settings") return;
+    if (windowRole !== "main") return;
     isFirstRun()
       .then((first) => {
         if (first) setShowOnboarding(true);
       })
       .catch(() => {});
-  }, [page]);
+  }, [windowRole]);
 
-  // Poll alert level (only for blackhole window)
+  // Poll alert level (blackhole/preview windows)
   useEffect(() => {
-    if (page !== "blackhole") return;
+    if (windowRole === "main") return;
 
     const poll = setInterval(async () => {
       try {
@@ -61,37 +68,157 @@ function App() {
     }, 2000);
 
     return () => clearInterval(poll);
-  }, [page]);
+  }, [windowRole]);
 
-  // Onboarding handles its own completion via completeOnboarding()
-  // The parent re-checks isFirstRun on next render
+  // Onboarding overlay (main window)
+  if (windowRole === "main" && showOnboarding) {
+    return <Onboarding />;
+  }
 
-  // Settings page
-  if (page === "settings") {
-    if (showOnboarding) {
-      return <Onboarding />;
+  // Blackhole window — full screen overlay
+  if (windowRole === "blackhole") {
+    if (alertLevel === "blackhole") {
+      return <BlackHoleCanvas />;
     }
-    return <Settings />;
+    if (alertLevel === "green") return null;
+    return (
+      <>
+        <AlertOverlay alertLevel={alertLevel} />
+        <PreviewCanvas alertLevel={alertLevel} />
+      </>
+    );
   }
 
-  // Blackhole page - three-level alert system
-  if (alertLevel === "blackhole") {
-    // Full blackhole mode
-    return <BlackHoleCanvas />;
+  // Preview window — small floating indicator
+  if (windowRole === "preview") {
+    if (alertLevel === "green") return null;
+    return <PreviewCanvas alertLevel={alertLevel} />;
   }
 
-  if (alertLevel === "green") {
-    // Silent mode - just a transparent window (no visible UI)
-    return null;
-  }
-
-  // Yellow / Red alert mode
+  // ==================== Main Window ====================
+  // Has bottom navigation: Dashboard | Settings | Stats
   return (
-    <>
-      <AlertOverlay alertLevel={alertLevel} />
-      <PreviewCanvas alertLevel={alertLevel} />
-    </>
+    <div
+      style={{
+        width: "100%",
+        height: "100vh",
+        background: "#1a1a2e",
+        color: "#e0e0e0",
+        fontFamily: '"SF Pro Display", system-ui, sans-serif',
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* Page content area */}
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {mainPage === "dashboard" && <Dashboard />}
+        {mainPage === "settings" && <Settings />}
+        {mainPage === "stats" && (
+          <div style={{ padding: "28px 24px" }}>
+            <h2
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: "#fff",
+                marginBottom: 20,
+              }}
+            >
+              📊 {t("stats_title")}
+            </h2>
+            <StatsPanel />
+          </div>
+        )}
+      </div>
+
+      {/* Bottom navigation bar */}
+      <BottomNav currentPage={mainPage} onNavigate={setMainPage} />
+    </div>
   );
 }
 
-export default App;
+// --- Bottom Navigation Component ---
+
+function BottomNav({
+  currentPage,
+  onNavigate,
+}: {
+  currentPage: MainPage;
+  onNavigate: (page: MainPage) => void;
+}) {
+  const { t } = useI18n();
+
+  const tabs: { key: MainPage; icon: string; labelKey: "nav_dashboard" | "nav_settings" | "nav_stats" }[] = [
+    { key: "dashboard", icon: "⏱️", labelKey: "nav_dashboard" },
+    { key: "settings", icon: "⚙️", labelKey: "nav_settings" },
+    { key: "stats", icon: "📊", labelKey: "nav_stats" },
+  ];
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        borderTop: "1px solid #2a2a3e",
+        background: "#16162a",
+        flexShrink: 0,
+      }}
+    >
+      {tabs.map((tab) => {
+        const isActive = currentPage === tab.key;
+        return (
+          <button
+            key={tab.key}
+            onClick={() => onNavigate(tab.key)}
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "10px 0 8px",
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              position: "relative",
+            }}
+          >
+            {isActive && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: "20%",
+                  right: "20%",
+                  height: 2,
+                  background: "#ff8c00",
+                  borderRadius: "0 0 2 2",
+                }}
+              />
+            )}
+            <span
+              style={{
+                fontSize: 18,
+                lineHeight: 1,
+                marginBottom: 3,
+                transition: "transform 0.2s",
+                transform: isActive ? "scale(1.15)" : "scale(1)",
+              }}
+            >
+              {tab.icon}
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: isActive ? 600 : 400,
+                color: isActive ? "#ff8c00" : "#666",
+                transition: "color 0.2s",
+              }}
+            >
+              {t(tab.labelKey)}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
