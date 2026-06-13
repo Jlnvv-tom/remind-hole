@@ -1,11 +1,22 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { BlackHoleRenderer } from "../utils/blackhole-renderer";
-import { getBlackholeProgress, dismissBlackhole } from "../services/tauri-api";
+import {
+  getBlackholeProgress,
+  dismissBlackhole,
+  reportActivity,
+  canDismiss,
+  getCountdown,
+  getCooldown,
+} from "../services/tauri-api";
 
 export default function BlackHoleCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<BlackHoleRenderer | null>(null);
+  const [countdown, setCountdown] = useState<number>(-1);
+  const [canClose, setCanClose] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const activityThrottleRef = useRef(0);
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -19,17 +30,25 @@ export default function BlackHoleCanvas() {
     rendererRef.current = renderer;
     renderer.start();
 
-    // 轮询黑洞进度
+    // Poll progress, countdown, can_dismiss, cooldown
     const pollInterval = setInterval(async () => {
       try {
-        const progress = await getBlackholeProgress();
+        const [progress, cd, dismissable, cool] = await Promise.all([
+          getBlackholeProgress(),
+          getCountdown(),
+          canDismiss(),
+          getCooldown(),
+        ]);
         renderer.setProgress(progress);
+        setCountdown(cd);
+        setCanClose(dismissable);
+        setCooldown(cool);
       } catch {
-        // dev mode: tauri not available, use local timer
+        // Dev mode fallback: simulate
       }
-    }, 100);
+    }, 200);
 
-    // 监听窗口大小变化
+    // Resize
     const handleResize = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -37,9 +56,24 @@ export default function BlackHoleCanvas() {
     };
     window.addEventListener("resize", handleResize);
 
+    // Activity detection
+    const handleActivity = () => {
+      const now = Date.now();
+      if (now - activityThrottleRef.current < 1000) return; // throttle 1s
+      activityThrottleRef.current = now;
+      reportActivity().catch(() => {});
+    };
+
+    window.addEventListener("mousemove", handleActivity);
+    window.addEventListener("keydown", handleActivity);
+    window.addEventListener("mousedown", handleActivity);
+
     return () => {
       clearInterval(pollInterval);
       window.removeEventListener("resize", handleResize);
+      window.removeEventListener("mousemove", handleActivity);
+      window.removeEventListener("keydown", handleActivity);
+      window.removeEventListener("mousedown", handleActivity);
       renderer.stop();
     };
   }, []);
@@ -48,13 +82,19 @@ export default function BlackHoleCanvas() {
     const renderer = rendererRef.current;
     if (!renderer) return;
 
+    try {
+      const dismissable = await canDismiss();
+      if (!dismissable) return;
+    } catch {
+      // Dev mode: allow dismiss
+    }
+
     renderer.collapse(async () => {
       try {
         await dismissBlackhole();
       } catch {
         // ignore
       }
-      // 隐藏黑洞窗口
       try {
         await getCurrentWindow().hide();
       } catch {
@@ -63,18 +103,133 @@ export default function BlackHoleCanvas() {
     });
   }, []);
 
+  // Format countdown as MM:SS
+  const formatCountdown = (seconds: number): string => {
+    if (seconds < 0) return "";
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
+  const countdownText =
+    countdown > 0
+      ? formatCountdown(countdown)
+      : countdown === 0
+        ? "已被吞噬！"
+        : "";
+
   return (
-    <canvas
-      ref={canvasRef}
-      onClick={handleClick}
+    <div
       style={{
         position: "fixed",
         top: 0,
         left: 0,
         width: "100vw",
         height: "100vh",
-        cursor: "pointer",
+        cursor: canClose ? "pointer" : "not-allowed",
       }}
-    />
+      onClick={handleClick}
+    >
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+        }}
+      />
+
+      {/* Countdown overlay */}
+      {countdownText && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            textAlign: "center",
+            pointerEvents: "none",
+            zIndex: 10,
+          }}
+        >
+          <div
+            style={{
+              fontSize: countdown === 0 ? 36 : 64,
+              fontWeight: 800,
+              color: "#fff",
+              textShadow: "0 0 30px rgba(255, 140, 0, 0.6)",
+              fontFamily: '"SF Pro Display", system-ui, sans-serif',
+            }}
+          >
+            {countdownText}
+          </div>
+        </div>
+      )}
+
+      {/* Dismiss hint */}
+      {canClose && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: 40,
+            left: "50%",
+            transform: "translateX(-50%)",
+            fontSize: 16,
+            color: "rgba(255, 255, 255, 0.7)",
+            pointerEvents: "none",
+            animation: "fadeInOut 2s ease-in-out infinite",
+          }}
+        >
+          点击关闭
+        </div>
+      )}
+
+      {/* Cannot dismiss hint */}
+      {!canClose && countdown > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: 40,
+            left: "50%",
+            transform: "translateX(-50%)",
+            fontSize: 14,
+            color: "rgba(255, 200, 100, 0.7)",
+            pointerEvents: "none",
+          }}
+        >
+          请离开电脑 30 秒...
+        </div>
+      )}
+
+      {/* Cooldown indicator */}
+      {cooldown > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            top: 20,
+            left: "50%",
+            transform: "translateX(-50%)",
+            padding: "8px 16px",
+            background: "rgba(255, 140, 0, 0.2)",
+            border: "1px solid rgba(255, 140, 0, 0.3)",
+            borderRadius: 8,
+            fontSize: 13,
+            color: "#ff8c00",
+            pointerEvents: "none",
+          }}
+        >
+          冷却中，还需等待 {Math.ceil(cooldown)} 秒
+        </div>
+      )}
+
+      <style>{`
+        @keyframes fadeInOut {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 1; }
+        }
+      `}</style>
+    </div>
   );
 }

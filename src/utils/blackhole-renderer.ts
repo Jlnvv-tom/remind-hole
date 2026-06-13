@@ -6,6 +6,19 @@ interface Star {
   twinkleSpeed: number;
 }
 
+interface DustParticle {
+  angle: number;
+  dist: number;
+  speed: number;
+  size: number;
+  opacity: number;
+}
+
+interface Ripple {
+  startTime: number;
+  duration: number;
+}
+
 interface BlackHoleRendererConfig {
   canvas: HTMLCanvasElement;
   starCount: number;
@@ -16,15 +29,24 @@ export class BlackHoleRenderer {
   private width: number;
   private height: number;
   private stars: Star[] = [];
+  private dustParticles: DustParticle[] = [];
+  private ripples: Ripple[] = [];
   private animationId = 0;
   private _progress = 0;
   private collapsing = false;
+  private alertLevel: string = "green";
+  // private _startTime = 0;
+  private whiteFlashAlpha = 0;
+  private hasFlashed = false;
+  private shakeOffset = { x: 0, y: 0 };
 
   constructor(private config: BlackHoleRendererConfig) {
     this.ctx = config.canvas.getContext("2d")!;
     this.width = config.canvas.width;
     this.height = config.canvas.height;
     this.initStars();
+    this.initDustParticles();
+    // this._startTime = performance.now();
   }
 
   private initStars() {
@@ -37,48 +59,135 @@ export class BlackHoleRenderer {
     }));
   }
 
+  private initDustParticles() {
+    this.dustParticles = Array.from({ length: 30 }, () => ({
+      angle: Math.random() * Math.PI * 2,
+      dist: Math.random() * 200 + 50,
+      speed: Math.random() * 0.003 + 0.001,
+      size: Math.random() * 1.5 + 0.5,
+      opacity: Math.random() * 0.5 + 0.3,
+    }));
+  }
+
   setProgress(progress: number) {
+    const prev = this._progress;
     this._progress = Math.min(1, Math.max(0, progress));
+
+    // Trigger ripple on significant progress change
+    if (prev < 0.01 && this._progress >= 0.01) {
+      this.addRipple();
+    }
+
+    // Trigger white flash when fully filled
+    if (this._progress >= 0.98 && !this.hasFlashed) {
+      this.flashWhite();
+      this.hasFlashed = true;
+    }
   }
 
   get progress() {
     return this._progress;
   }
 
+  setAlertLevel(level: string) {
+    this.alertLevel = level;
+  }
+
   private getCurrentRadius(): number {
     const maxRadius =
       Math.sqrt(this.width ** 2 + this.height ** 2) / 2;
     const minRadius = 5;
-    const eased = this._progress * this._progress; // easeInQuad
+    const eased = this._progress * this._progress;
     return minRadius + (maxRadius - minRadius) * eased;
   }
 
-  render(timestamp: number) {
+  /** Get color for accretion disk based on progress (blue → orange) */
+  getDiskColor(progress: number): string {
+    // Early: blue-ish (100, 150, 255)
+    // Late: red-orange (255, 80, 0)
+    const r = Math.round(100 + (255 - 100) * progress);
+    const g = Math.round(150 + (80 - 150) * progress);
+    const b = Math.round(255 + (0 - 255) * progress);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  /** Get disk color with alpha */
+  private getDiskColorAlpha(progress: number, alpha: number): string {
+    const r = Math.round(100 + (255 - 100) * progress);
+    const g = Math.round(150 + (80 - 150) * progress);
+    const b = Math.round(255 + (0 - 255) * progress);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  private addRipple() {
+    this.ripples.push({
+      startTime: performance.now(),
+      duration: 2000,
+    });
+  }
+
+  flashWhite() {
+    this.whiteFlashAlpha = 1.0;
+    // Shake effect
+    const shakeFrames = 10;
+    let frame = 0;
+    const shake = () => {
+      if (frame >= shakeFrames) {
+        this.shakeOffset = { x: 0, y: 0 };
+        return;
+      }
+      const intensity = (1 - frame / shakeFrames) * 8;
+      this.shakeOffset = {
+        x: (Math.random() - 0.5) * intensity,
+        y: (Math.random() - 0.5) * intensity,
+      };
+      frame++;
+      requestAnimationFrame(shake);
+    };
+    requestAnimationFrame(shake);
+  }
+
+  render(timestamp: number, _alertLevel?: string) {
+    const level = _alertLevel ?? this.alertLevel;
+    this.alertLevel = level;
+
     const { ctx, width, height } = this;
-    const cx = width / 2;
-    const cy = height / 2;
+    const cx = width / 2 + this.shakeOffset.x;
+    const cy = height / 2 + this.shakeOffset.y;
     const radius = this.getCurrentRadius();
+
+    // Apply breathing effect
+    const breathRadius = this.renderBreathing(cx, cy, radius, timestamp);
 
     ctx.clearRect(0, 0, width, height);
 
     // Layer 1: 星空背景
-    this.renderStars(timestamp, cx, cy, radius);
+    this.renderStars(timestamp, cx, cy, breathRadius);
+
+    // Layer 1.5: 星尘粒子
+    this.renderDustParticles(cx, cy, breathRadius, timestamp);
+
+    // Layer 1.6: 时空涟漪
+    this.renderRipples(cx, cy, timestamp);
 
     // Layer 2: 引力透镜
-    this.renderGravitationalLensing(cx, cy, radius);
+    this.renderGravitationalLensing(cx, cy, breathRadius);
 
-    // Layer 3: 吸积盘
-    this.renderAccretionDisk(cx, cy, radius, timestamp);
+    // Layer 3: 吸积盘 (with color temperature)
+    this.renderAccretionDisk(cx, cy, breathRadius, timestamp);
 
     // Layer 4: 事件视界
-    this.renderEventHorizon(cx, cy, radius);
+    this.renderEventHorizon(cx, cy, breathRadius);
 
     // Layer 5: 光环
-    this.renderPhotonRing(cx, cy, radius, timestamp);
+    this.renderPhotonRing(cx, cy, breathRadius, timestamp);
 
-    // 铺满后显示文字
-    if (this._progress >= 0.9) {
-      this.renderWarningText(cx, cy);
+    // White flash overlay
+    if (this.whiteFlashAlpha > 0) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${this.whiteFlashAlpha})`;
+      ctx.fillRect(0, 0, width, height);
+      this.whiteFlashAlpha -= 0.02;
+      if (this.whiteFlashAlpha < 0) this.whiteFlashAlpha = 0;
     }
   }
 
@@ -111,6 +220,92 @@ export class BlackHoleRenderer {
       this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
       this.ctx.fill();
     }
+  }
+
+  /** 星尘粒子：30个微小粒子螺旋坠入黑洞 */
+  renderDustParticles(
+    cx: number,
+    cy: number,
+    radius: number,
+    _timestamp: number
+  ) {
+    if (radius < 15) return;
+
+    const ctx = this.ctx;
+    for (const particle of this.dustParticles) {
+      // Spiral inward
+      particle.angle += particle.speed;
+      particle.dist -= 0.3;
+
+      // Reset if too close
+      if (particle.dist < radius * 0.5) {
+        particle.dist = radius * 2 + Math.random() * 100;
+        particle.angle = Math.random() * Math.PI * 2;
+        particle.opacity = Math.random() * 0.5 + 0.3;
+      }
+
+      const x = cx + Math.cos(particle.angle) * particle.dist;
+      const y = cy + Math.sin(particle.angle) * particle.dist;
+
+      // Fade as they get closer
+      const fadeStart = radius * 1.5;
+      const fadeEnd = radius * 0.6;
+      const fadeDist = particle.dist;
+      let alpha = particle.opacity;
+      if (fadeDist < fadeStart) {
+        alpha *= Math.max(0, (fadeDist - fadeEnd) / (fadeStart - fadeEnd));
+      }
+
+      if (alpha <= 0) continue;
+
+      ctx.beginPath();
+      ctx.arc(x, y, particle.size, 0, Math.PI * 2);
+      ctx.fillStyle = this.getDiskColorAlpha(this._progress, alpha);
+      ctx.fill();
+    }
+  }
+
+  /** 时空涟漪：黑洞出现时从中心扩散3圈波纹 */
+  renderRipples(cx: number, cy: number, _timestamp: number) {
+    const ctx = this.ctx;
+    // Clean up old ripples
+    this.ripples = this.ripples.filter(
+      (r) => _timestamp - r.startTime < r.duration
+    );
+
+    for (const ripple of this.ripples) {
+      const elapsed = _timestamp - ripple.startTime;
+      const progress = elapsed / ripple.duration;
+
+      // 3 concentric rings
+      for (let i = 0; i < 3; i++) {
+        const ringProgress = Math.min(1, progress + i * 0.15);
+        const ringRadius = ringProgress * Math.max(this.width, this.height) * 0.4;
+        const alpha = (1 - ringProgress) * 0.15;
+
+        if (alpha <= 0) continue;
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = this.getDiskColorAlpha(this._progress, alpha);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+  }
+
+  /** 黑洞呼吸：事件视界半径 ±3% 缓慢缩放 */
+  renderBreathing(
+    _cx: number,
+    _cy: number,
+    radius: number,
+    timestamp: number
+  ): number {
+    const breathAmplitude = 0.03;
+    const breathSpeed = 0.001;
+    const breathFactor =
+      1 + Math.sin(timestamp * breathSpeed) * breathAmplitude;
+    return radius * breathFactor;
   }
 
   private renderGravitationalLensing(
@@ -163,11 +358,14 @@ export class BlackHoleRenderer {
       0,
       diskOuterRadius
     );
-    gradient.addColorStop(0, "rgba(255, 100, 0, 0)");
-    gradient.addColorStop(0.3, "rgba(255, 120, 20, 0.4)");
-    gradient.addColorStop(0.6, "rgba(255, 80, 0, 0.6)");
-    gradient.addColorStop(0.8, "rgba(255, 50, 0, 0.3)");
-    gradient.addColorStop(1, "rgba(255, 30, 0, 0)");
+
+    // Use color temperature based on progress
+    const p = this._progress;
+    gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
+    gradient.addColorStop(0.3, this.getDiskColorAlpha(p, 0.4));
+    gradient.addColorStop(0.6, this.getDiskColorAlpha(p, 0.6));
+    gradient.addColorStop(0.8, this.getDiskColorAlpha(p, 0.3));
+    gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
 
     this.ctx.beginPath();
     this.ctx.arc(0, 0, diskOuterRadius, 0, Math.PI * 2);
@@ -218,24 +416,11 @@ export class BlackHoleRenderer {
     this.ctx.shadowBlur = 0;
   }
 
-  private renderWarningText(cx: number, cy: number) {
-    const alpha = Math.min(1, (this._progress - 0.9) / 0.1);
-    this.ctx.save();
-    this.ctx.font = 'bold 48px "SF Pro Display", system-ui, sans-serif';
-    this.ctx.textAlign = "center";
-    this.ctx.textBaseline = "middle";
-    this.ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-    this.ctx.fillText("🚶 起来活动一下！", cx, cy - 30);
-    this.ctx.font = '20px "SF Pro Display", system-ui, sans-serif';
-    this.ctx.fillStyle = `rgba(200, 200, 200, ${alpha * 0.7})`;
-    this.ctx.fillText("点击任意位置关闭黑洞", cx, cy + 20);
-    this.ctx.restore();
-  }
-
-  /** 坍缩动画 */
-  collapse(onComplete: () => void) {
+  /** 坍缩动画 - 支持强制关闭 */
+  collapse(onComplete: () => void, force: boolean = false) {
     if (this.collapsing) return;
     this.collapsing = true;
+    this._forceCollapse = force;
 
     let p = this._progress;
     const step = () => {
@@ -243,6 +428,7 @@ export class BlackHoleRenderer {
       if (p <= 0) {
         this._progress = 0;
         this.collapsing = false;
+        this.hasFlashed = false;
         onComplete();
         return;
       }
@@ -250,6 +436,16 @@ export class BlackHoleRenderer {
       requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
+  }
+
+  private _forceCollapse = false;
+
+  get isCollapsing() {
+    return this.collapsing;
+  }
+
+  get isForceCollapsing() {
+    return this._forceCollapse;
   }
 
   start() {

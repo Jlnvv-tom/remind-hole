@@ -1,30 +1,147 @@
-import { useState, useEffect } from "react";
-import { getSettings, updateSettings, type AppSettings } from "../services/tauri-api";
+import { useState, useEffect, useCallback } from "react";
+import {
+  getSettings,
+  updateSettings,
+  type AppSettings,
+  type WorkSchedule,
+} from "../services/tauri-api";
+import StatsPanel from "./StatsPanel";
+
+interface Preset {
+  name: string;
+  emoji: string;
+  interval: number;
+  duration: number;
+  desc: string;
+}
+
+const PRESETS: Preset[] = [
+  {
+    name: "佛系",
+    emoji: "🧘",
+    interval: 60,
+    duration: 60,
+    desc: "每60分钟提醒，60秒铺满",
+  },
+  {
+    name: "标准",
+    emoji: "⚡",
+    interval: 30,
+    duration: 30,
+    desc: "每30分钟提醒，30秒铺满",
+  },
+  {
+    name: "严格",
+    emoji: "🔥",
+    interval: 15,
+    duration: 15,
+    desc: "每15分钟提醒，15秒铺满",
+  },
+];
 
 export default function Settings() {
   const [settings, setSettings] = useState<AppSettings>({
-    remind_interval_minutes: 1, // 开发默认 1 分钟方便测试
+    remind_interval_minutes: 30,
     fill_duration_seconds: 30,
   });
-  const [saved, setSaved] = useState(false);
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [showCustom, setShowCustom] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [schedule, setSchedule] = useState<WorkSchedule>({
+    enabled: false,
+    work_start: "09:00",
+    work_end: "18:00",
+    enabled_days: [1, 2, 3, 4, 5],
+  });
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   useEffect(() => {
     getSettings()
-      .then((s) => setSettings(s))
+      .then((s) => {
+        setSettings(s);
+        // Check if matches a preset
+        const match = PRESETS.find(
+          (p) =>
+            p.interval === s.remind_interval_minutes &&
+            p.duration === s.fill_duration_seconds
+        );
+        if (match) {
+          setActivePreset(match.name);
+        } else {
+          setActivePreset(null);
+          setShowCustom(true);
+        }
+        if (s.work_schedule) {
+          setSchedule(s.work_schedule);
+        }
+      })
       .catch(() => {});
   }, []);
 
-  const handleSave = async () => {
-    try {
-      await updateSettings(
-        settings.remind_interval_minutes,
-        settings.fill_duration_seconds
-      );
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch {
-      // ignore
-    }
+  const applySettings = useCallback(
+    async (interval: number, duration: number) => {
+      try {
+        await updateSettings(interval, duration);
+      } catch {
+        // ignore in dev mode
+      }
+    },
+    []
+  );
+
+  const handlePresetClick = useCallback(
+    (preset: Preset) => {
+      setActivePreset(preset.name);
+      setShowCustom(false);
+      setSettings((prev) => ({
+        ...prev,
+        remind_interval_minutes: preset.interval,
+        fill_duration_seconds: preset.duration,
+      }));
+      applySettings(preset.interval, preset.duration);
+    },
+    [applySettings]
+  );
+
+  const handleIntervalChange = useCallback(
+    (value: number) => {
+      setActivePreset(null);
+      setShowCustom(true);
+      setSettings((prev) => ({
+        ...prev,
+        remind_interval_minutes: value,
+      }));
+      applySettings(value, settings.fill_duration_seconds);
+    },
+    [applySettings, settings.fill_duration_seconds]
+  );
+
+  const handleDurationChange = useCallback(
+    (value: number) => {
+      setActivePreset(null);
+      setShowCustom(true);
+      setSettings((prev) => ({
+        ...prev,
+        fill_duration_seconds: value,
+      }));
+      applySettings(settings.remind_interval_minutes, value);
+    },
+    [applySettings, settings.remind_interval_minutes]
+  );
+
+  const toggleDay = (day: number) => {
+    setSchedule((prev) => {
+      const days = prev.enabled_days.includes(day)
+        ? prev.enabled_days.filter((d) => d !== day)
+        : [...prev.enabled_days, day].sort();
+      return { ...prev, enabled_days: days };
+    });
+  };
+
+  const handleReset = async () => {
+    setShowResetConfirm(false);
+    // Reset to default preset
+    handlePresetClick(PRESETS[1]);
   };
 
   return (
@@ -39,114 +156,409 @@ export default function Settings() {
         flexDirection: "column",
         padding: "32px 24px",
         boxSizing: "border-box",
+        overflowY: "auto",
       }}
     >
       <h1
         style={{
           fontSize: 24,
           fontWeight: 700,
-          marginBottom: 32,
+          marginBottom: 24,
           color: "#fff",
         }}
       >
         🕳️ BlackHole 设置
       </h1>
 
-      <div style={{ marginBottom: 28 }}>
-        <label
-          style={{
-            display: "block",
-            fontSize: 14,
-            color: "#aaa",
-            marginBottom: 8,
-          }}
-        >
-          久坐提醒间隔
-        </label>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <input
-            type="range"
-            min={1}
-            max={120}
-            value={settings.remind_interval_minutes}
-            onChange={(e) =>
-              setSettings({
-                ...settings,
-                remind_interval_minutes: Number(e.target.value),
-              })
-            }
-            style={{ flex: 1 }}
-          />
-          <span
-            style={{
-              fontSize: 18,
-              fontWeight: 600,
-              color: "#ff8c00",
-              minWidth: 60,
-              textAlign: "right",
-            }}
-          >
-            {settings.remind_interval_minutes} 分钟
-          </span>
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 28 }}>
-        <label
-          style={{
-            display: "block",
-            fontSize: 14,
-            color: "#aaa",
-            marginBottom: 8,
-          }}
-        >
-          黑洞铺满时间
-        </label>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <input
-            type="range"
-            min={10}
-            max={300}
-            value={settings.fill_duration_seconds}
-            onChange={(e) =>
-              setSettings({
-                ...settings,
-                fill_duration_seconds: Number(e.target.value),
-              })
-            }
-            style={{ flex: 1 }}
-          />
-          <span
-            style={{
-              fontSize: 18,
-              fontWeight: 600,
-              color: "#ff8c00",
-              minWidth: 60,
-              textAlign: "right",
-            }}
-          >
-            {settings.fill_duration_seconds} 秒
-          </span>
-        </div>
-      </div>
-
-      <button
-        onClick={handleSave}
+      {/* Preset Cards */}
+      <div
         style={{
-          marginTop: "auto",
-          padding: "12px 0",
-          background: saved ? "#4caf50" : "#ff8c00",
-          color: "#fff",
-          border: "none",
-          borderRadius: 8,
-          fontSize: 16,
-          fontWeight: 600,
-          cursor: "pointer",
-          transition: "background 0.3s",
+          display: "flex",
+          gap: 10,
+          marginBottom: 20,
         }}
       >
-        {saved ? "✓ 已保存" : "保存设置"}
-      </button>
+        {PRESETS.map((preset) => {
+          const isActive = activePreset === preset.name;
+          return (
+            <div
+              key={preset.name}
+              onClick={() => handlePresetClick(preset)}
+              style={{
+                flex: 1,
+                padding: "14px 8px",
+                borderRadius: 10,
+                border: `2px solid ${isActive ? "#ff8c00" : "#2a2a3e"}`,
+                background: isActive
+                  ? "rgba(255, 140, 0, 0.1)"
+                  : "#1e1e32",
+                cursor: "pointer",
+                textAlign: "center",
+                transition: "all 0.2s",
+              }}
+            >
+              <div style={{ fontSize: 28, marginBottom: 4 }}>{preset.emoji}</div>
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: isActive ? "#ff8c00" : "#ccc",
+                }}
+              >
+                {preset.name}
+              </div>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: "#888",
+                  marginTop: 2,
+                  lineHeight: 1.3,
+                }}
+              >
+                {preset.desc}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Custom toggle */}
+      <div
+        onClick={() => setShowCustom(!showCustom)}
+        style={{
+          fontSize: 13,
+          color: showCustom ? "#ff8c00" : "#888",
+          cursor: "pointer",
+          marginBottom: showCustom ? 16 : 20,
+          userSelect: "none",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        <span style={{ transition: "transform 0.2s", display: "inline-block", transform: showCustom ? "rotate(90deg)" : "rotate(0deg)" }}>
+          ▸
+        </span>
+        自定义设置
+      </div>
+
+      {/* Custom sliders */}
+      {showCustom && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 20 }}>
+            <label
+              style={{
+                display: "block",
+                fontSize: 14,
+                color: "#aaa",
+                marginBottom: 8,
+              }}
+            >
+              久坐提醒间隔
+            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <input
+                type="range"
+                min={1}
+                max={120}
+                value={settings.remind_interval_minutes}
+                onChange={(e) => handleIntervalChange(Number(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <span
+                style={{
+                  fontSize: 18,
+                  fontWeight: 600,
+                  color: "#ff8c00",
+                  minWidth: 60,
+                  textAlign: "right",
+                }}
+              >
+                {settings.remind_interval_minutes} 分钟
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                fontSize: 14,
+                color: "#aaa",
+                marginBottom: 8,
+              }}
+            >
+              黑洞铺满时间
+            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <input
+                type="range"
+                min={10}
+                max={300}
+                value={settings.fill_duration_seconds}
+                onChange={(e) => handleDurationChange(Number(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <span
+                style={{
+                  fontSize: 18,
+                  fontWeight: 600,
+                  color: "#ff8c00",
+                  minWidth: 60,
+                  textAlign: "right",
+                }}
+              >
+                {settings.fill_duration_seconds} 秒
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Work Schedule */}
+      <div style={{ marginBottom: 16 }}>
+        <div
+          onClick={() => setShowSchedule(!showSchedule)}
+          style={{
+            fontSize: 13,
+            color: showSchedule ? "#ff8c00" : "#888",
+            cursor: "pointer",
+            userSelect: "none",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span style={{ transition: "transform 0.2s", display: "inline-block", transform: showSchedule ? "rotate(90deg)" : "rotate(0deg)" }}>
+            ▸
+          </span>
+          工作时间表
+        </div>
+
+        {showSchedule && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: 16,
+              background: "#1e1e32",
+              borderRadius: 8,
+            }}
+          >
+            {/* Enable switch */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 14,
+              }}
+            >
+              <span style={{ fontSize: 14, color: "#ccc" }}>启用工作时间</span>
+              <div
+                onClick={() =>
+                  setSchedule((prev) => ({
+                    ...prev,
+                    enabled: !prev.enabled,
+                  }))
+                }
+                style={{
+                  width: 44,
+                  height: 24,
+                  borderRadius: 12,
+                  background: schedule.enabled ? "#ff8c00" : "#3a3a4e",
+                  cursor: "pointer",
+                  position: "relative",
+                  transition: "background 0.2s",
+                }}
+              >
+                <div
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: "50%",
+                    background: "#fff",
+                    position: "absolute",
+                    top: 2,
+                    left: schedule.enabled ? 22 : 2,
+                    transition: "left 0.2s",
+                  }}
+                />
+              </div>
+            </div>
+
+            {schedule.enabled && (
+              <>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    marginBottom: 14,
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>
+                      开始时间
+                    </label>
+                    <input
+                      type="time"
+                      value={schedule.work_start}
+                      onChange={(e) =>
+                        setSchedule((prev) => ({
+                          ...prev,
+                          work_start: e.target.value,
+                        }))
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        background: "#2a2a3e",
+                        color: "#e0e0e0",
+                        border: "1px solid #3a3a4e",
+                        borderRadius: 6,
+                        fontSize: 14,
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>
+                      结束时间
+                    </label>
+                    <input
+                      type="time"
+                      value={schedule.work_end}
+                      onChange={(e) =>
+                        setSchedule((prev) => ({
+                          ...prev,
+                          work_end: e.target.value,
+                        }))
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "8px 10px",
+                        background: "#2a2a3e",
+                        color: "#e0e0e0",
+                        border: "1px solid #3a3a4e",
+                        borderRadius: 6,
+                        fontSize: 14,
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 6 }}>
+                    活跃日期
+                  </label>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {["一", "二", "三", "四", "五", "六", "日"].map(
+                      (label, i) => {
+                        const day = i + 1;
+                        const active = schedule.enabled_days.includes(day);
+                        return (
+                          <div
+                            key={day}
+                            onClick={() => toggleDay(day)}
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: "50%",
+                              background: active ? "#ff8c00" : "#2a2a3e",
+                              color: active ? "#fff" : "#666",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              transition: "all 0.2s",
+                            }}
+                          >
+                            {label}
+                          </div>
+                        );
+                      }
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Stats Panel */}
+      <StatsPanel />
+
+      {/* Reset button */}
+      <div style={{ marginTop: "auto", paddingTop: 20 }}>
+        {showResetConfirm ? (
+          <div
+            style={{
+              padding: 12,
+              background: "rgba(255, 0, 0, 0.1)",
+              borderRadius: 8,
+              border: "1px solid rgba(255, 0, 0, 0.3)",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: 13, color: "#ff6666", marginBottom: 8 }}>
+              确定要重置所有数据？此操作不可撤销
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={handleReset}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  background: "#da3633",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 6,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                确认重置
+              </button>
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  background: "#2a2a3e",
+                  color: "#ccc",
+                  border: "none",
+                  borderRadius: 6,
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            style={{
+              width: "100%",
+              padding: "10px 0",
+              background: "transparent",
+              color: "#666",
+              border: "1px solid #2a2a3e",
+              borderRadius: 8,
+              fontSize: 13,
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+          >
+            🗑️ 重置所有数据
+          </button>
+        )}
+      </div>
     </div>
   );
 }
