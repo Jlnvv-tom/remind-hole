@@ -86,6 +86,12 @@ const enUS: Record<LocaleKey, string> = {
   dashboard_no_activity: "No activity",
   dashboard_minute_short: "m",
   dashboard_second_short: "s",
+  dashboard_start: "Start Timer",
+  dashboard_pause: "Pause",
+  dashboard_resume: "Resume",
+  dashboard_stand_up: "I Stood Up",
+  dashboard_dismiss: "Dismiss Black Hole",
+  dashboard_paused: "Paused",
 };
 
 export default enUS;

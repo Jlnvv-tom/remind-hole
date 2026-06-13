@@ -15,6 +15,8 @@ export interface TimerStatus {
   can_dismiss: boolean;
   cooldown_remaining: number;
   ignore_count: number;
+  running: boolean;
+  user_started: boolean;
 }
 
 export interface Stats {
@@ -95,4 +97,18 @@ export async function isFirstRun(): Promise<boolean> {
 
 export async function completeOnboarding(): Promise<void> {
   return invoke("complete_onboarding");
+}
+
+// ---- Timer Control ----
+
+export async function startTimer(): Promise<void> {
+  return invoke("start_timer");
+}
+
+export async function pauseTimer(): Promise<void> {
+  return invoke("pause_timer");
+}
+
+export async function resetTimer(): Promise<void> {
+  return invoke("reset_timer");
 }

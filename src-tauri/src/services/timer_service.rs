@@ -83,6 +83,8 @@ struct TimerState {
     ignore_count: u32,
     /// 上次忽略时间
     last_ignore_time: Option<Instant>,
+    /// 用户是否手动启动过计时器
+    user_started: bool,
 }
 
 pub struct TimerService {
@@ -93,8 +95,8 @@ impl TimerService {
     pub fn new() -> Self {
         Self {
             state: Mutex::new(TimerState {
-                running: true,
-                started_at: Some(Instant::now()),
+                running: false,
+                started_at: None,
                 paused_duration: Duration::ZERO,
                 remind_interval: 45 * 60,
                 fill_duration: 30,
@@ -104,6 +106,7 @@ impl TimerService {
                 blackhole_appeared_at: None,
                 ignore_count: 0,
                 last_ignore_time: None,
+                user_started: false,
             }),
         }
     }
@@ -120,6 +123,43 @@ impl TimerService {
             }
             None => state.paused_duration.as_secs(),
         }
+    }
+
+    /// Start or resume the timer
+    pub fn start(&self) {
+        let mut state = self.state.lock().unwrap();
+        if state.running {
+            return; // already running
+        }
+        state.running = true;
+        state.started_at = Some(Instant::now());
+        state.user_started = true;
+    }
+
+    /// Pause the timer
+    pub fn pause(&self) {
+        let mut state = self.state.lock().unwrap();
+        if !state.running {
+            return; // already paused
+        }
+        // Accumulate elapsed time into paused_duration
+        if let Some(started) = state.started_at {
+            state.paused_duration += started.elapsed();
+        }
+        state.running = false;
+        state.started_at = None;
+    }
+
+    /// Is the timer currently running?
+    pub fn is_running(&self) -> bool {
+        let state = self.state.lock().unwrap();
+        state.running
+    }
+
+    /// Has the user ever started the timer?
+    pub fn is_user_started(&self) -> bool {
+        let state = self.state.lock().unwrap();
+        state.user_started
     }
 
     pub fn should_show_blackhole(&self) -> bool {
@@ -150,6 +190,7 @@ impl TimerService {
         state.started_at = Some(Instant::now());
         state.paused_duration = Duration::ZERO;
         state.blackhole_appeared_at = None;
+        // Keep running state — reset just restarts the counter
     }
 
     // --- P0: 活跃检测 ---

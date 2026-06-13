@@ -84,6 +84,12 @@ const zhCN = {
   dashboard_no_activity: "暂无活动",
   dashboard_minute_short: "分",
   dashboard_second_short: "秒",
+  dashboard_start: "开始计时",
+  dashboard_pause: "暂停",
+  dashboard_resume: "继续",
+  dashboard_stand_up: "我起身了",
+  dashboard_dismiss: "关闭黑洞",
+  dashboard_paused: "已暂停",
 };
 
 export default zhCN;

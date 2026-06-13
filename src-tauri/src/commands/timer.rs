@@ -13,6 +13,8 @@ pub struct TimerStatus {
     pub can_dismiss: bool,
     pub cooldown_remaining: u64,
     pub ignore_count: u32,
+    pub running: bool,
+    pub user_started: bool,
 }
 
 #[tauri::command]
@@ -31,6 +33,8 @@ pub fn get_timer_status(timer: State<'_, TimerService>) -> TimerStatus {
         can_dismiss: timer.can_dismiss(),
         cooldown_remaining: timer.get_cooldown_remaining(),
         ignore_count: timer.get_ignore_count(),
+        running: timer.is_running(),
+        user_started: timer.is_user_started(),
     }
 }
 
@@ -78,4 +82,30 @@ pub fn get_countdown(timer: State<'_, TimerService>) -> u64 {
 #[tauri::command]
 pub fn get_cooldown(timer: State<'_, TimerService>) -> u64 {
     timer.get_cooldown_seconds()
+}
+
+#[tauri::command]
+pub fn start_timer(timer: State<'_, TimerService>) {
+    timer.start();
+}
+
+#[tauri::command]
+pub fn pause_timer(timer: State<'_, TimerService>) {
+    timer.pause();
+}
+
+#[tauri::command]
+pub fn reset_timer(
+    timer: State<'_, TimerService>,
+    stats: State<'_, StatsService>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    timer.reset();
+    stats.record_stand_up();
+    // Hide blackhole window if visible
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window("blackhole") {
+        let _ = window.hide();
+    }
+    Ok(())
 }

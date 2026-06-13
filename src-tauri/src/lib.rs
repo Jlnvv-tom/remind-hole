@@ -28,6 +28,18 @@ pub fn run() {
                 loop {
                     std::thread::sleep(Duration::from_secs(1));
 
+                    // Skip if timer not running
+                    if !timer_for_thread.is_running() {
+                        if was_showing {
+                            // Hide blackhole window if timer stopped
+                            if let Some(window) = handle.get_webview_window("blackhole") {
+                                let _ = window.hide();
+                            }
+                            was_showing = false;
+                        }
+                        continue;
+                    }
+
                     // 更新今日久坐时长
                     let elapsed_min = timer_for_thread.elapsed_seconds() / 60;
                     stats_for_thread.update_today_sitting(elapsed_min);
@@ -59,6 +71,9 @@ pub fn run() {
             commands::timer::get_alert_level,
             commands::timer::get_countdown,
             commands::timer::get_cooldown,
+            commands::timer::start_timer,
+            commands::timer::pause_timer,
+            commands::timer::reset_timer,
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::settings::apply_preset,

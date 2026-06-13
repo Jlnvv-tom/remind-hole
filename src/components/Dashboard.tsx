@@ -1,11 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import { BlackHoleRenderer } from "../utils/blackhole-renderer";
-import { getTimerStatus, type TimerStatus } from "../services/tauri-api";
+import {
+  getTimerStatus,
+  startTimer,
+  pauseTimer,
+  resetTimer,
+  type TimerStatus,
+} from "../services/tauri-api";
 import { useI18n } from "../i18n";
 
 export default function Dashboard() {
   const { t } = useI18n();
   const [status, setStatus] = useState<TimerStatus | null>(null);
+  const [starting, setStarting] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<BlackHoleRenderer | null>(null);
 
@@ -19,6 +26,8 @@ export default function Dashboard() {
         // Dev mode fallback
       }
     }, 500);
+    // Also fetch immediately
+    getTimerStatus().then(setStatus).catch(() => {});
     return () => clearInterval(poll);
   }, []);
 
@@ -48,6 +57,32 @@ export default function Dashboard() {
       rendererRef.current.setProgress(status.progress);
     }
   }, [status]);
+
+  const handleStart = async () => {
+    setStarting(true);
+    try {
+      await startTimer();
+    } catch {
+      // ignore
+    }
+    setStarting(false);
+  };
+
+  const handlePause = async () => {
+    try {
+      await pauseTimer();
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleReset = async () => {
+    try {
+      await resetTimer();
+    } catch {
+      // ignore
+    }
+  };
 
   // Format elapsed seconds as HH:MM:SS or MM:SS
   const formatElapsed = (seconds: number): string => {
@@ -116,11 +151,23 @@ export default function Dashboard() {
   const elapsed = status?.elapsed ?? 0;
   const progress = status?.progress ?? 0;
   const secondsUntilFull = status?.seconds_until_full ?? 0;
+  const isRunning = status?.running ?? false;
+  const isUserStarted = status?.user_started ?? false;
 
   // Calculate progress percentage for the ring
-  // When not in blackhole mode, progress = elapsed / remind_interval
-  // When in blackhole mode, progress = blackhole_progress (0..1)
-  const ringProgress = alertLevel === "blackhole" ? progress : Math.min((elapsed / Math.max(secondsUntilFull + elapsed, 1)), 1);
+  const ringProgress =
+    alertLevel === "blackhole"
+      ? progress
+      : Math.min(elapsed / Math.max(secondsUntilFull + elapsed, 1), 1);
+
+  // Determine timer phase for UI display
+  const phase = !isUserStarted
+    ? "idle" // Never started
+    : !isRunning
+      ? "paused" // Paused
+      : alertLevel === "blackhole"
+        ? "blackhole" // Black hole active
+        : "running"; // Normal running
 
   return (
     <div
@@ -156,7 +203,7 @@ export default function Dashboard() {
           position: "relative",
           width: 160,
           height: 160,
-          marginBottom: 20,
+          marginBottom: 16,
         }}
       >
         <canvas
@@ -167,7 +214,7 @@ export default function Dashboard() {
             left: 0,
             width: 160,
             height: 160,
-            opacity: 0.5,
+            opacity: phase === "idle" ? 0.15 : 0.5,
             borderRadius: "50%",
           }}
         />
@@ -175,7 +222,12 @@ export default function Dashboard() {
         <svg
           width="160"
           height="160"
-          style={{ position: "absolute", top: 0, left: 0, transform: "rotate(-90deg)" }}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            transform: "rotate(-90deg)",
+          }}
         >
           <circle
             cx="80"
@@ -190,12 +242,14 @@ export default function Dashboard() {
             cy="80"
             r="72"
             fill="none"
-            stroke={alert.color}
+            stroke={phase === "idle" ? "#333" : alert.color}
             strokeWidth="4"
             strokeLinecap="round"
             strokeDasharray={`${2 * Math.PI * 72}`}
-            strokeDashoffset={`${2 * Math.PI * 72 * (1 - ringProgress)}`}
-            style={{ transition: "stroke-dashoffset 0.5s, stroke 0.5s" }}
+            strokeDashoffset={`${2 * Math.PI * 72 * (1 - (phase === "idle" ? 0 : ringProgress))}`}
+            style={{
+              transition: "stroke-dashoffset 0.5s, stroke 0.5s",
+            }}
           />
         </svg>
         {/* Center text */}
@@ -208,128 +262,365 @@ export default function Dashboard() {
             textAlign: "center",
           }}
         >
+          {phase === "idle" ? (
+            <>
+              <div
+                style={{
+                  fontSize: 32,
+                  lineHeight: 1,
+                  marginBottom: 4,
+                }}
+              >
+                🕳️
+              </div>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: "#666",
+                }}
+              >
+                {t("dashboard_no_activity")}
+              </div>
+            </>
+          ) : (
+            <>
+              <div
+                style={{
+                  fontSize: 28,
+                  fontWeight: 800,
+                  color: phase === "paused" ? "#888" : alert.color,
+                  fontFamily: '"SF Pro Display", system-ui, sans-serif',
+                  transition: "color 0.5s",
+                  lineHeight: 1,
+                  textDecoration: phase === "paused" ? "line-through" : "none",
+                  textDecorationColor: "#555",
+                }}
+              >
+                {formatElapsed(elapsed)}
+              </div>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: "#888",
+                  marginTop: 4,
+                }}
+              >
+                {phase === "paused"
+                  ? "⏸"
+                  : t("dashboard_elapsed")}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Alert badge — only show when timer is active */}
+      {phase !== "idle" && (
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 14px",
+            borderRadius: 16,
+            background: `${alert.color}22`,
+            border: `1px solid ${alert.color}44`,
+            marginBottom: 16,
+            transition: "all 0.5s",
+          }}
+        >
           <div
             style={{
-              fontSize: 28,
-              fontWeight: 800,
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: alert.color,
+              boxShadow: `0 0 6px ${alert.color}`,
+              animation:
+                alertLevel !== "green" || phase === "paused"
+                  ? "pulse 1.5s ease-in-out infinite"
+                  : "none",
+            }}
+          />
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
               color: alert.color,
-              fontFamily: '"SF Pro Display", system-ui, sans-serif',
-              transition: "color 0.5s",
-              lineHeight: 1,
             }}
           >
-            {formatElapsed(elapsed)}
-          </div>
+            {phase === "paused"
+              ? "⏸ " + t("dashboard_paused")
+              : alert.statusText}
+          </span>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          width: "100%",
+          marginBottom: 16,
+        }}
+      >
+        {phase === "idle" && (
+          <button
+            onClick={handleStart}
+            disabled={starting}
+            style={{
+              flex: 1,
+              padding: "12px 0",
+              background: "linear-gradient(135deg, #4caf50, #2e7d32)",
+              color: "#fff",
+              border: "none",
+              borderRadius: 12,
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: starting ? "wait" : "pointer",
+              transition: "transform 0.15s, box-shadow 0.15s",
+              boxShadow: "0 4px 15px rgba(76, 175, 80, 0.3)",
+            }}
+            onMouseDown={(e) =>
+              (e.currentTarget.style.transform = "scale(0.97)")
+            }
+            onMouseUp={(e) =>
+              (e.currentTarget.style.transform = "scale(1)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.transform = "scale(1)")
+            }
+          >
+            ▶ {t("dashboard_start")}
+          </button>
+        )}
+
+        {phase === "running" && (
+          <>
+            <button
+              onClick={handlePause}
+              style={{
+                flex: 1,
+                padding: "12px 0",
+                background: "#2a2a3e",
+                color: "#ffc107",
+                border: "1px solid #ffc10744",
+                borderRadius: 12,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "transform 0.15s",
+              }}
+              onMouseDown={(e) =>
+                (e.currentTarget.style.transform = "scale(0.97)")
+              }
+              onMouseUp={(e) =>
+                (e.currentTarget.style.transform = "scale(1)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.transform = "scale(1)")
+              }
+            >
+              ⏸ {t("dashboard_pause")}
+            </button>
+            <button
+              onClick={handleReset}
+              style={{
+                flex: 1,
+                padding: "12px 0",
+                background: "#2a2a3e",
+                color: "#ff8c00",
+                border: "1px solid #ff8c0044",
+                borderRadius: 12,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "transform 0.15s",
+              }}
+              onMouseDown={(e) =>
+                (e.currentTarget.style.transform = "scale(0.97)")
+              }
+              onMouseUp={(e) =>
+                (e.currentTarget.style.transform = "scale(1)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.transform = "scale(1)")
+              }
+            >
+              🧍 {t("dashboard_stand_up")}
+            </button>
+          </>
+        )}
+
+        {phase === "paused" && (
+          <>
+            <button
+              onClick={handleStart}
+              style={{
+                flex: 1,
+                padding: "12px 0",
+                background: "linear-gradient(135deg, #4caf50, #2e7d32)",
+                color: "#fff",
+                border: "none",
+                borderRadius: 12,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "transform 0.15s",
+                boxShadow: "0 4px 15px rgba(76, 175, 80, 0.3)",
+              }}
+              onMouseDown={(e) =>
+                (e.currentTarget.style.transform = "scale(0.97)")
+              }
+              onMouseUp={(e) =>
+                (e.currentTarget.style.transform = "scale(1)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.transform = "scale(1)")
+              }
+            >
+              ▶ {t("dashboard_resume")}
+            </button>
+            <button
+              onClick={handleReset}
+              style={{
+                flex: 1,
+                padding: "12px 0",
+                background: "#2a2a3e",
+                color: "#ff8c00",
+                border: "1px solid #ff8c0044",
+                borderRadius: 12,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "transform 0.15s",
+              }}
+              onMouseDown={(e) =>
+                (e.currentTarget.style.transform = "scale(0.97)")
+              }
+              onMouseUp={(e) =>
+                (e.currentTarget.style.transform = "scale(1)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.transform = "scale(1)")
+              }
+            >
+              🧍 {t("dashboard_stand_up")}
+            </button>
+          </>
+        )}
+
+        {phase === "blackhole" && (
+          <button
+            onClick={handleReset}
+            style={{
+              flex: 1,
+              padding: "12px 0",
+              background: "linear-gradient(135deg, #9c27b0, #6a1b9a)",
+              color: "#fff",
+              border: "none",
+              borderRadius: 12,
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "transform 0.15s",
+              boxShadow: "0 4px 15px rgba(156, 39, 176, 0.3)",
+            }}
+            onMouseDown={(e) =>
+              (e.currentTarget.style.transform = "scale(0.97)")
+            }
+            onMouseUp={(e) =>
+              (e.currentTarget.style.transform = "scale(1)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.transform = "scale(1)")
+            }
+          >
+            🕳️ {t("dashboard_dismiss")}
+          </button>
+        )}
+      </div>
+
+      {/* Info cards — only when active */}
+      {phase !== "idle" && (
+        <div
+          style={{
+            width: "100%",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 10,
+          }}
+        >
+          {/* Next reminder */}
           <div
             style={{
-              fontSize: 10,
-              color: "#888",
-              marginTop: 4,
+              padding: "12px 14px",
+              background: "#1e1e32",
+              borderRadius: 10,
+              border: "1px solid #2a2a3e",
             }}
           >
-            {t("dashboard_elapsed")}
+            <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>
+              {t("dashboard_next_remind")}
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#e0e0e0" }}>
+              {alertLevel === "blackhole"
+                ? "—"
+                : formatCountdown(secondsUntilFull)}
+            </div>
+          </div>
+
+          {/* Progress */}
+          <div
+            style={{
+              padding: "12px 14px",
+              background: "#1e1e32",
+              borderRadius: 10,
+              border: "1px solid #2a2a3e",
+            }}
+          >
+            <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>
+              {t("dashboard_progress")}
+            </div>
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: phase === "paused" ? "#888" : alert.color,
+              }}
+            >
+              {alertLevel === "blackhole"
+                ? `${Math.round(progress * 100)}%`
+                : `${Math.round(ringProgress * 100)}%`}
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Alert badge */}
-      <div
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "6px 14px",
-          borderRadius: 16,
-          background: `${alert.color}22`,
-          border: `1px solid ${alert.color}44`,
-          marginBottom: 20,
-          transition: "all 0.5s",
-        }}
-      >
-        <div
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: alert.color,
-            boxShadow: `0 0 6px ${alert.color}`,
-            animation: alertLevel !== "green" ? "pulse 1.5s ease-in-out infinite" : "none",
-          }}
-        />
-        <span style={{ fontSize: 13, fontWeight: 600, color: alert.color }}>
-          {alert.statusText}
-        </span>
-      </div>
-
-      {/* Info cards */}
-      <div
-        style={{
-          width: "100%",
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 10,
-        }}
-      >
-        {/* Next reminder */}
-        <div
-          style={{
-            padding: "12px 14px",
-            background: "#1e1e32",
-            borderRadius: 10,
-            border: "1px solid #2a2a3e",
-          }}
-        >
-          <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>
-            {t("dashboard_next_remind")}
-          </div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#e0e0e0" }}>
-            {alertLevel === "blackhole"
-              ? "—"
-              : formatCountdown(secondsUntilFull)}
-          </div>
-        </div>
-
-        {/* Progress */}
-        <div
-          style={{
-            padding: "12px 14px",
-            background: "#1e1e32",
-            borderRadius: 10,
-            border: "1px solid #2a2a3e",
-          }}
-        >
-          <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>
-            {t("dashboard_progress")}
-          </div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: alert.color }}>
-            {alertLevel === "blackhole"
-              ? `${Math.round(progress * 100)}%`
-              : `${Math.round(ringProgress * 100)}%`}
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Progress bar */}
-      <div
-        style={{
-          width: "100%",
-          marginTop: 16,
-          height: 4,
-          borderRadius: 2,
-          background: "#2a2a3e",
-          overflow: "hidden",
-        }}
-      >
+      {phase !== "idle" && (
         <div
           style={{
-            width: `${(alertLevel === "blackhole" ? progress : ringProgress) * 100}%`,
-            height: "100%",
-            background: `linear-gradient(90deg, ${alert.color}, ${alert.color}88)`,
+            width: "100%",
+            marginTop: 16,
+            height: 4,
             borderRadius: 2,
-            transition: "width 0.5s, background 0.5s",
+            background: "#2a2a3e",
+            overflow: "hidden",
           }}
-        />
-      </div>
+        >
+          <div
+            style={{
+              width: `${(alertLevel === "blackhole" ? progress : ringProgress) * 100}%`,
+              height: "100%",
+              background: `linear-gradient(90deg, ${alert.color}, ${alert.color}88)`,
+              borderRadius: 2,
+              transition: "width 0.5s, background 0.5s",
+            }}
+          />
+        </div>
+      )}
 
       <style>{`
         @keyframes pulse {
