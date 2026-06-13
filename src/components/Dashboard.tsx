@@ -22,12 +22,17 @@ export default function Dashboard() {
       try {
         const s = await getTimerStatus();
         setStatus(s);
-      } catch {
-        // Dev mode fallback
+      } catch (e) {
+        // Silently ignore poll errors (dev mode)
       }
     }, 500);
     // Also fetch immediately
-    getTimerStatus().then(setStatus).catch(() => {});
+    getTimerStatus()
+      .then((s) => {
+        console.log("[Dashboard] initial status:", s);
+        setStatus(s);
+      })
+      .catch((e) => console.error("[Dashboard] initial status error:", e));
     return () => clearInterval(poll);
   }, []);
 
@@ -61,26 +66,32 @@ export default function Dashboard() {
   const handleStart = async () => {
     setStarting(true);
     try {
+      console.log("[Dashboard] startTimer invoking...");
       await startTimer();
-    } catch {
-      // ignore
+      console.log("[Dashboard] startTimer success");
+    } catch (e) {
+      console.error("[Dashboard] startTimer error:", e);
     }
     setStarting(false);
   };
 
   const handlePause = async () => {
     try {
+      console.log("[Dashboard] pauseTimer invoking...");
       await pauseTimer();
-    } catch {
-      // ignore
+      console.log("[Dashboard] pauseTimer success");
+    } catch (e) {
+      console.error("[Dashboard] pauseTimer error:", e);
     }
   };
 
   const handleReset = async () => {
     try {
+      console.log("[Dashboard] resetTimer invoking...");
       await resetTimer();
-    } catch {
-      // ignore
+      console.log("[Dashboard] resetTimer success");
+    } catch (e) {
+      console.error("[Dashboard] resetTimer error:", e);
     }
   };
 

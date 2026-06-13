@@ -18,6 +18,14 @@ pub fn run() {
         .manage(timer_service.clone())
         .manage(stats_service.clone())
         .setup(move |app| {
+            // Auto-open DevTools in debug builds for the settings window
+            #[cfg(debug_assertions)]
+            {
+                if let Some(window) = app.get_webview_window("settings") {
+                    window.open_devtools();
+                }
+            }
+
             // 启动后台计时线程
             let timer_for_thread = timer_service.clone();
             let stats_for_thread = stats_service.clone();
