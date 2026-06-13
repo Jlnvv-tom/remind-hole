@@ -74,6 +74,7 @@ pub fn run() {
             commands::timer::start_timer,
             commands::timer::pause_timer,
             commands::timer::reset_timer,
+            commands::devtools::toggle_devtools,
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::settings::apply_preset,

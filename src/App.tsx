@@ -9,6 +9,16 @@ import AlertOverlay from "./components/AlertOverlay";
 import { isFirstRun, getAlertLevel } from "./services/tauri-api";
 import { useI18n } from "./i18n";
 
+// DevTools toggle (only works in dev mode)
+async function toggleDevtools() {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("toggle_devtools");
+  } catch {
+    // Not in Tauri context
+  }
+}
+
 type WindowRole = "main" | "blackhole" | "preview";
 type MainPage = "dashboard" | "settings" | "stats";
 
@@ -42,6 +52,18 @@ export default function App() {
           setWindowRole("main");
         });
     }
+  }, []);
+
+  // DevTools shortcut: Cmd/Ctrl + Shift + I
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "I") {
+        e.preventDefault();
+        toggleDevtools();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, []);
 
   // Check first run (main window only)
