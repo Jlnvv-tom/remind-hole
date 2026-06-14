@@ -28,7 +28,7 @@ impl Preset {
         match self {
             Preset::Relaxed => 60 * 60,
             Preset::Standard => 45 * 60,
-            Preset::Strict => 25 * 60,
+            Preset::Strict => 15 * 60,
             Preset::Custom => 0, // custom uses explicit values
         }
     }

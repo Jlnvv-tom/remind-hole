@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 export interface AppSettings {
   remind_interval_minutes: number;
   fill_duration_seconds: number;
+  preset?: string;
   work_schedule?: WorkSchedule;
 }
 

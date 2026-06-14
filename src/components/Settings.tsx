@@ -111,13 +111,19 @@ export default function Settings() {
     getSettings()
       .then((s) => {
         setSettings(s);
-        const match = PRESETS.find(
-          (p) =>
-            p.interval === s.remind_interval_minutes &&
-            p.duration === s.fill_duration_seconds
-        );
-        if (match) {
-          setActivePreset(match.nameKey);
+        // 用后端返回的 preset 字段匹配预设卡片
+        if (s.preset && s.preset !== "custom") {
+          const nameKey = ({
+            relaxed: "preset_relaxed",
+            standard: "preset_standard",
+            strict: "preset_strict",
+          } as Record<string, LocaleKey>)[s.preset];
+          if (nameKey) {
+            setActivePreset(nameKey);
+          } else {
+            setActivePreset(null);
+            setShowCustom(true);
+          }
         } else {
           setActivePreset(null);
           setShowCustom(true);

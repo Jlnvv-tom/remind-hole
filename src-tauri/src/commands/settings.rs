@@ -96,6 +96,12 @@ pub fn update_settings(
 
     timer.update_settings(final_interval, final_fill, preset, new_schedule.clone());
 
+    // 切换预设后重置计时器，从新的间隔重新开始计时
+    if request.preset.is_some() && preset != Preset::Custom {
+        timer.reset();
+        timer.start();
+    }
+
     // Persist settings to disk
     let _ = save_settings(&app, &PersistedSettings {
         remind_interval_minutes: final_interval / 60,
