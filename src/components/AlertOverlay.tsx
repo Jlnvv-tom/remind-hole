@@ -1,3 +1,5 @@
+import { AlertTriangle, AlertCircle } from "lucide-react";
+
 interface AlertOverlayProps {
   alertLevel: string;
 }
@@ -5,28 +7,20 @@ interface AlertOverlayProps {
 export default function AlertOverlay({ alertLevel }: AlertOverlayProps) {
   if (alertLevel !== "yellow" && alertLevel !== "red") return null;
 
-  const color =
-    alertLevel === "red"
-      ? "rgba(255, 0, 0, 0.08)"
-      : "rgba(255, 200, 0, 0.05)";
-
-  const glowColor =
-    alertLevel === "red"
-      ? "rgba(255, 0, 0, 0.15)"
-      : "rgba(255, 200, 0, 0.1)";
-
-  const animationName =
-    alertLevel === "red" ? "alertPulseRed" : "alertPulseYellow";
+  const isRed = alertLevel === "red";
+  const color = isRed ? "rgba(239,83,80,0.06)" : "rgba(255,179,0,0.04)";
+  const glowColor = isRed ? "rgba(239,83,80,0.12)" : "rgba(255,179,0,0.08)";
+  const animationName = isRed ? "alertPulseRed" : "alertPulseYellow";
 
   return (
     <>
       <style>{`
         @keyframes alertPulseYellow {
-          0%, 100% { opacity: 0.6; }
+          0%, 100% { opacity: 0.5; }
           50% { opacity: 1; }
         }
         @keyframes alertPulseRed {
-          0%, 100% { opacity: 0.5; }
+          0%, 100% { opacity: 0.4; }
           50% { opacity: 1; }
         }
       `}</style>
@@ -43,6 +37,23 @@ export default function AlertOverlay({ alertLevel }: AlertOverlayProps) {
           animation: `${animationName} 2s ease-in-out infinite`,
         }}
       />
+      {/* Icon indicator */}
+      <div
+        style={{
+          position: "fixed",
+          top: 20,
+          right: 20,
+          zIndex: 9999,
+          pointerEvents: "none",
+          animation: `${animationName} 2s ease-in-out infinite`,
+        }}
+      >
+        {isRed ? (
+          <AlertCircle size={28} style={{ color: "#ef5350" }} />
+        ) : (
+          <AlertTriangle size={28} style={{ color: "#ffb300" }} />
+        )}
+      </div>
     </>
   );
 }

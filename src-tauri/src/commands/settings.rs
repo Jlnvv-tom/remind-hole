@@ -4,6 +4,36 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
 
+/// Persistent settings stored on disk
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PersistedSettings {
+    pub remind_interval_minutes: u64,
+    pub fill_duration_seconds: u64,
+    pub preset: String,
+    pub work_schedule: WorkSchedule,
+}
+
+const SETTINGS_KEY: &str = "timer_settings";
+
+fn save_settings(app: &tauri::AppHandle, settings: &PersistedSettings) -> Result<(), String> {
+    use tauri_plugin_store::StoreExt;
+    let store = app
+        .store("app-store.json")
+        .map_err(|e| e.to_string())?;
+    let json = serde_json::to_string(settings).map_err(|e| e.to_string())?;
+    store.set(SETTINGS_KEY, json);
+    store.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn load_settings(app: &tauri::AppHandle) -> Option<PersistedSettings> {
+    use tauri_plugin_store::StoreExt;
+    let store = app.store("app-store.json").ok()?;
+    let value = store.get(SETTINGS_KEY)?;
+    let json = value.as_str()?;
+    serde_json::from_str(json).ok()
+}
+
 #[derive(Serialize)]
 pub struct SettingsResponse {
     pub remind_interval_minutes: u64,
@@ -33,6 +63,7 @@ pub fn get_settings(timer: State<'_, Arc<TimerService>>) -> SettingsResponse {
 
 #[tauri::command]
 pub fn update_settings(
+    app: tauri::AppHandle,
     timer: State<'_, Arc<TimerService>>,
     request: UpdateSettingsRequest,
 ) -> Result<(), String> {
@@ -63,12 +94,25 @@ pub fn update_settings(
         (new_interval, new_fill)
     };
 
-    timer.update_settings(final_interval, final_fill, preset, new_schedule);
+    timer.update_settings(final_interval, final_fill, preset, new_schedule.clone());
+
+    // Persist settings to disk
+    let _ = save_settings(&app, &PersistedSettings {
+        remind_interval_minutes: final_interval / 60,
+        fill_duration_seconds: final_fill,
+        preset: format!("{:?}", preset).to_lowercase(),
+        work_schedule: new_schedule,
+    });
+
     Ok(())
 }
 
 #[tauri::command]
-pub fn apply_preset(timer: State<'_, Arc<TimerService>>, preset: String) -> Result<(), String> {
+pub fn apply_preset(
+    app: tauri::AppHandle,
+    timer: State<'_, Arc<TimerService>>,
+    preset: String,
+) -> Result<(), String> {
     let preset = match preset.as_str() {
         "relaxed" => Preset::Relaxed,
         "standard" => Preset::Standard,
@@ -76,6 +120,16 @@ pub fn apply_preset(timer: State<'_, Arc<TimerService>>, preset: String) -> Resu
         _ => return Err(format!("Unknown preset: {}", preset)),
     };
     timer.apply_preset(preset);
+
+    // Persist
+    let (interval, fill, _, schedule) = timer.get_settings();
+    let _ = save_settings(&app, &PersistedSettings {
+        remind_interval_minutes: interval / 60,
+        fill_duration_seconds: fill,
+        preset: format!("{:?}", preset).to_lowercase(),
+        work_schedule: schedule,
+    });
+
     Ok(())
 }
 

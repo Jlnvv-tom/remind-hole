@@ -2,7 +2,7 @@ mod commands;
 mod services;
 
 use services::stats_service::StatsService;
-use services::timer_service::TimerService;
+use services::timer_service::{Preset, TimerService};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::Manager;
@@ -18,6 +18,22 @@ pub fn run() {
         .manage(timer.clone())
         .manage(stats.clone())
         .setup(move |app| {
+            // Load persisted settings into TimerService
+            if let Some(persisted) = commands::settings::load_settings(app.handle()) {
+                let preset = match persisted.preset.as_str() {
+                    "relaxed" => Preset::Relaxed,
+                    "strict" => Preset::Strict,
+                    "custom" => Preset::Custom,
+                    _ => Preset::Standard,
+                };
+                timer.update_settings(
+                    persisted.remind_interval_minutes * 60,
+                    persisted.fill_duration_seconds,
+                    preset,
+                    persisted.work_schedule,
+                );
+            }
+
             // Auto-open DevTools in debug builds for the settings window
             #[cfg(debug_assertions)]
             {

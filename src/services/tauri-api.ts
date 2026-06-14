@@ -20,10 +20,10 @@ export interface TimerStatus {
 }
 
 export interface Stats {
-  today_standups: number;
+  today_stand_count: number;
   streak_days: number;
-  weekly_data: number[]; // 7 days in minutes
-  total_ignores: number;
+  weekly_sitting_minutes: number[]; // 7 days in minutes, Mon-Sun
+  total_ignore_count: number;
 }
 
 export interface WorkSchedule {
@@ -53,11 +53,13 @@ export async function getSettings(): Promise<AppSettings> {
 
 export async function updateSettings(
   remindInterval: number,
-  fillDuration: number
+  fillDuration: number,
+  preset?: string
 ): Promise<void> {
   return invoke("update_settings", {
-    remindInterval,
-    fillDuration,
+    remind_interval_minutes: remindInterval,
+    fill_duration_seconds: fillDuration,
+    preset: preset ?? "custom",
   });
 }
 

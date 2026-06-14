@@ -7,11 +7,27 @@ import {
 } from "../services/tauri-api";
 import { useI18n } from "../i18n";
 import type { LocaleKey } from "../i18n/locales/zh-CN";
+import {
+  Settings as SettingsIcon,
+  SlidersHorizontal,
+  Clock,
+  Calendar,
+  Globe,
+  Zap,
+  Coffee,
+  Flame,
+  ShieldCheck,
+  RotateCcw,
+  ChevronRight,
+  ToggleLeft,
+  ToggleRight,
+  AlertCircle,
+} from "lucide-react";
 
 interface Preset {
   nameKey: LocaleKey;
   descKey: LocaleKey;
-  emoji: string;
+  icon: "shield" | "zap" | "flame";
   interval: number;
   duration: number;
 }
@@ -20,21 +36,21 @@ const PRESETS: Preset[] = [
   {
     nameKey: "preset_relaxed",
     descKey: "preset_relaxed_desc",
-    emoji: "🧘",
+    icon: "shield",
     interval: 60,
     duration: 60,
   },
   {
     nameKey: "preset_standard",
     descKey: "preset_standard_desc",
-    emoji: "⚡",
-    interval: 30,
+    icon: "zap",
+    interval: 45,
     duration: 30,
   },
   {
     nameKey: "preset_strict",
     descKey: "preset_strict_desc",
-    emoji: "🔥",
+    icon: "flame",
     interval: 15,
     duration: 15,
   },
@@ -50,10 +66,34 @@ const DAY_KEYS: LocaleKey[] = [
   "day_sun",
 ];
 
+function presetNameKeyToRust(nameKey: LocaleKey): string {
+  switch (nameKey) {
+    case "preset_relaxed": return "relaxed";
+    case "preset_standard": return "standard";
+    case "preset_strict": return "strict";
+    default: return "custom";
+  }
+}
+
+function PresetIcon({ icon, size = 24, color }: { icon: string; size?: number; color?: string }) {
+  switch (icon) {
+    case "shield":
+      return <ShieldCheck size={size} style={{ color }} />;
+    case "zap":
+      return <Zap size={size} style={{ color }} />;
+    case "flame":
+      return <Flame size={size} style={{ color }} />;
+    default:
+      return <Coffee size={size} style={{ color }} />;
+  }
+}
+
+const PRESET_COLORS = ["#4caf50", "#ff8c00", "#ef5350"];
+
 export default function Settings() {
   const { t, toggleLocale } = useI18n();
   const [settings, setSettings] = useState<AppSettings>({
-    remind_interval_minutes: 30,
+    remind_interval_minutes: 45,
     fill_duration_seconds: 30,
   });
   const [activePreset, setActivePreset] = useState<string | null>(null);
@@ -71,7 +111,6 @@ export default function Settings() {
     getSettings()
       .then((s) => {
         setSettings(s);
-        // Check if matches a preset
         const match = PRESETS.find(
           (p) =>
             p.interval === s.remind_interval_minutes &&
@@ -91,12 +130,10 @@ export default function Settings() {
   }, []);
 
   const applySettings = useCallback(
-    async (interval: number, duration: number) => {
+    async (interval: number, duration: number, preset?: string) => {
       try {
-        await updateSettings(interval, duration);
-      } catch {
-        // ignore in dev mode
-      }
+        await updateSettings(interval, duration, preset);
+      } catch {}
     },
     []
   );
@@ -110,7 +147,7 @@ export default function Settings() {
         remind_interval_minutes: preset.interval,
         fill_duration_seconds: preset.duration,
       }));
-      applySettings(preset.interval, preset.duration);
+      applySettings(preset.interval, preset.duration, presetNameKeyToRust(preset.nameKey));
     },
     [applySettings]
   );
@@ -119,11 +156,8 @@ export default function Settings() {
     (value: number) => {
       setActivePreset(null);
       setShowCustom(true);
-      setSettings((prev) => ({
-        ...prev,
-        remind_interval_minutes: value,
-      }));
-      applySettings(value, settings.fill_duration_seconds);
+      setSettings((prev) => ({ ...prev, remind_interval_minutes: value }));
+      applySettings(value, settings.fill_duration_seconds, "custom");
     },
     [applySettings, settings.fill_duration_seconds]
   );
@@ -132,11 +166,8 @@ export default function Settings() {
     (value: number) => {
       setActivePreset(null);
       setShowCustom(true);
-      setSettings((prev) => ({
-        ...prev,
-        fill_duration_seconds: value,
-      }));
-      applySettings(settings.remind_interval_minutes, value);
+      setSettings((prev) => ({ ...prev, fill_duration_seconds: value }));
+      applySettings(settings.remind_interval_minutes, value, "custom");
     },
     [applySettings, settings.remind_interval_minutes]
   );
@@ -152,7 +183,6 @@ export default function Settings() {
 
   const handleReset = async () => {
     setShowResetConfirm(false);
-    // Reset to default preset
     handlePresetClick(PRESETS[1]);
   };
 
@@ -161,83 +191,93 @@ export default function Settings() {
       style={{
         width: "100%",
         height: "100vh",
-        background: "#1a1a2e",
+        background: "#0f0f1a",
         color: "#e0e0e0",
         fontFamily: '"SF Pro Display", system-ui, sans-serif',
         display: "flex",
         flexDirection: "column",
-        padding: "32px 24px",
+        padding: "24px 20px",
         boxSizing: "border-box",
         overflowY: "auto",
       }}
     >
-      {/* Title + Language Toggle */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-        <h1
-          style={{
-            fontSize: 24,
-            fontWeight: 700,
-            color: "#fff",
-            margin: 0,
-          }}
-        >
-          {t("settings_title")}
-        </h1>
+      {/* Title + Language */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 24,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <SettingsIcon size={22} style={{ color: "#ff8c00" }} />
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#fff", margin: 0 }}>
+            {t("settings_title")}
+          </h1>
+        </div>
         <button
           onClick={toggleLocale}
           style={{
-            padding: "4px 12px",
-            background: "#2a2a3e",
-            color: "#aaa",
-            border: "1px solid #3a3a4e",
-            borderRadius: 6,
+            padding: "6px 12px",
+            background: "#16162a",
+            color: "#888",
+            border: "1px solid #1e1e32",
+            borderRadius: 8,
             fontSize: 12,
             cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
             transition: "all 0.2s",
           }}
         >
-          {t("lang_switch")}
+          <Globe size={12} /> {t("lang_switch")}
         </button>
       </div>
 
       {/* Preset Cards */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
-          gap: 8,
-          marginBottom: 20,
-        }}
-      >
-        {PRESETS.map((preset) => {
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
+        {PRESETS.map((preset, idx) => {
           const isActive = activePreset === preset.nameKey;
+          const accent = PRESET_COLORS[idx];
           return (
             <div
               key={preset.nameKey}
               onClick={() => handlePresetClick(preset)}
               style={{
-                padding: "12px 6px",
-                borderRadius: 10,
-                border: `2px solid ${isActive ? "#ff8c00" : "#2a2a3e"}`,
-                background: isActive
-                  ? "rgba(255, 140, 0, 0.1)"
-                  : "#1e1e32",
+                padding: "16px 8px",
+                borderRadius: 14,
+                border: `1.5px solid ${isActive ? accent : "#1e1e32"}`,
+                background: isActive ? `${accent}12` : "#13132a",
                 cursor: "pointer",
                 textAlign: "center",
-                transition: "all 0.2s",
-                minWidth: 0,
+                transition: "all 0.25s",
+                position: "relative",
                 overflow: "hidden",
               }}
             >
-              <div style={{ fontSize: 24, marginBottom: 2 }}>{preset.emoji}</div>
+              {isActive && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 2,
+                    background: accent,
+                  }}
+                />
+              )}
+              <div style={{ marginBottom: 6 }}>
+                <PresetIcon icon={preset.icon} size={28} color={isActive ? accent : "#666"} />
+              </div>
               <div
                 style={{
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: 700,
-                  color: isActive ? "#ff8c00" : "#ccc",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
+                  color: isActive ? accent : "#bbb",
+                  marginBottom: 3,
                 }}
               >
                 {t(preset.nameKey)}
@@ -245,13 +285,8 @@ export default function Settings() {
               <div
                 style={{
                   fontSize: 10,
-                  color: "#888",
-                  marginTop: 2,
-                  lineHeight: 1.3,
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
+                  color: "#666",
+                  lineHeight: 1.4,
                 }}
               >
                 {t(preset.descKey)}
@@ -266,34 +301,54 @@ export default function Settings() {
         onClick={() => setShowCustom(!showCustom)}
         style={{
           fontSize: 13,
-          color: showCustom ? "#ff8c00" : "#888",
+          color: showCustom ? "#ff8c00" : "#666",
           cursor: "pointer",
           marginBottom: showCustom ? 16 : 20,
           userSelect: "none",
           display: "flex",
           alignItems: "center",
           gap: 6,
+          padding: "8px 12px",
+          background: showCustom ? "#ff8c0010" : "transparent",
+          borderRadius: 8,
+          border: showCustom ? "1px solid #ff8c0020" : "1px solid transparent",
+          transition: "all 0.2s",
         }}
       >
-        <span style={{ transition: "transform 0.2s", display: "inline-block", transform: showCustom ? "rotate(90deg)" : "rotate(0deg)" }}>
-          ▸
-        </span>
-        {t("custom_settings")}
+        <SlidersHorizontal size={14} />
+        <span style={{ flex: 1 }}>{t("custom_settings")}</span>
+        <ChevronRight
+          size={14}
+          style={{
+            transform: showCustom ? "rotate(90deg)" : "rotate(0deg)",
+            transition: "transform 0.2s",
+          }}
+        />
       </div>
 
       {/* Custom sliders */}
       {showCustom && (
-        <div style={{ marginBottom: 20 }}>
+        <div
+          style={{
+            marginBottom: 20,
+            padding: "16px",
+            background: "#13132a",
+            borderRadius: 14,
+            border: "1px solid #1e1e32",
+          }}
+        >
           <div style={{ marginBottom: 20 }}>
             <label
               style={{
-                display: "block",
-                fontSize: 14,
-                color: "#aaa",
-                marginBottom: 8,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 13,
+                color: "#999",
+                marginBottom: 10,
               }}
             >
-              {t("remind_interval")}
+              <Clock size={14} /> {t("remind_interval")}
             </label>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <input
@@ -302,15 +357,16 @@ export default function Settings() {
                 max={120}
                 value={settings.remind_interval_minutes}
                 onChange={(e) => handleIntervalChange(Number(e.target.value))}
-                style={{ flex: 1 }}
+                style={{ flex: 1, accentColor: "#ff8c00" }}
               />
               <span
                 style={{
-                  fontSize: 18,
-                  fontWeight: 600,
+                  fontSize: 16,
+                  fontWeight: 700,
                   color: "#ff8c00",
-                  minWidth: 60,
+                  minWidth: 64,
                   textAlign: "right",
+                  fontFamily: '"SF Mono", monospace',
                 }}
               >
                 {settings.remind_interval_minutes} {t("minutes")}
@@ -321,13 +377,15 @@ export default function Settings() {
           <div>
             <label
               style={{
-                display: "block",
-                fontSize: 14,
-                color: "#aaa",
-                marginBottom: 8,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 13,
+                color: "#999",
+                marginBottom: 10,
               }}
             >
-              {t("fill_duration")}
+              <Zap size={14} /> {t("fill_duration")}
             </label>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <input
@@ -336,15 +394,16 @@ export default function Settings() {
                 max={300}
                 value={settings.fill_duration_seconds}
                 onChange={(e) => handleDurationChange(Number(e.target.value))}
-                style={{ flex: 1 }}
+                style={{ flex: 1, accentColor: "#ff8c00" }}
               />
               <span
                 style={{
-                  fontSize: 18,
-                  fontWeight: 600,
+                  fontSize: 16,
+                  fontWeight: 700,
                   color: "#ff8c00",
-                  minWidth: 60,
+                  minWidth: 64,
                   textAlign: "right",
+                  fontFamily: '"SF Mono", monospace',
                 }}
               >
                 {settings.fill_duration_seconds} {t("seconds")}
@@ -360,30 +419,41 @@ export default function Settings() {
           onClick={() => setShowSchedule(!showSchedule)}
           style={{
             fontSize: 13,
-            color: showSchedule ? "#ff8c00" : "#888",
+            color: showSchedule ? "#ff8c00" : "#666",
             cursor: "pointer",
             userSelect: "none",
             display: "flex",
             alignItems: "center",
             gap: 6,
+            padding: "8px 12px",
+            background: showSchedule ? "#ff8c0010" : "transparent",
+            borderRadius: 8,
+            border: showSchedule ? "1px solid #ff8c0020" : "1px solid transparent",
+            transition: "all 0.2s",
           }}
         >
-          <span style={{ transition: "transform 0.2s", display: "inline-block", transform: showSchedule ? "rotate(90deg)" : "rotate(0deg)" }}>
-            ▸
-          </span>
-          {t("work_schedule")}
+          <Calendar size={14} />
+          <span style={{ flex: 1 }}>{t("work_schedule")}</span>
+          <ChevronRight
+            size={14}
+            style={{
+              transform: showSchedule ? "rotate(90deg)" : "rotate(0deg)",
+              transition: "transform 0.2s",
+            }}
+          />
         </div>
 
         {showSchedule && (
           <div
             style={{
-              marginTop: 12,
+              marginTop: 10,
               padding: 16,
-              background: "#1e1e32",
-              borderRadius: 8,
+              background: "#13132a",
+              borderRadius: 14,
+              border: "1px solid #1e1e32",
             }}
           >
-            {/* Enable switch */}
+            {/* Enable toggle */}
             <div
               style={{
                 display: "flex",
@@ -392,93 +462,69 @@ export default function Settings() {
                 marginBottom: 14,
               }}
             >
-              <span style={{ fontSize: 14, color: "#ccc" }}>{t("enable_work_time")}</span>
+              <span style={{ fontSize: 14, color: "#bbb", display: "flex", alignItems: "center", gap: 6 }}>
+                <Clock size={14} /> {t("enable_work_time")}
+              </span>
               <div
                 onClick={() =>
-                  setSchedule((prev) => ({
-                    ...prev,
-                    enabled: !prev.enabled,
-                  }))
+                  setSchedule((prev) => ({ ...prev, enabled: !prev.enabled }))
                 }
-                style={{
-                  width: 44,
-                  height: 24,
-                  borderRadius: 12,
-                  background: schedule.enabled ? "#ff8c00" : "#3a3a4e",
-                  cursor: "pointer",
-                  position: "relative",
-                  transition: "background 0.2s",
-                }}
+                style={{ cursor: "pointer", display: "flex", alignItems: "center" }}
               >
-                <div
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: "50%",
-                    background: "#fff",
-                    position: "absolute",
-                    top: 2,
-                    left: schedule.enabled ? 22 : 2,
-                    transition: "left 0.2s",
-                  }}
-                />
+                {schedule.enabled ? (
+                  <ToggleRight size={36} style={{ color: "#ff8c00" }} />
+                ) : (
+                  <ToggleLeft size={36} style={{ color: "#333" }} />
+                )}
               </div>
             </div>
 
             {schedule.enabled && (
               <>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 12,
-                    marginBottom: 14,
-                  }}
-                >
+                <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
                   <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>
+                    <label
+                      style={{ fontSize: 12, color: "#666", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}
+                    >
                       {t("start_time")}
                     </label>
                     <input
                       type="time"
                       value={schedule.work_start}
                       onChange={(e) =>
-                        setSchedule((prev) => ({
-                          ...prev,
-                          work_start: e.target.value,
-                        }))
+                        setSchedule((prev) => ({ ...prev, work_start: e.target.value }))
                       }
                       style={{
                         width: "100%",
                         padding: "8px 10px",
-                        background: "#2a2a3e",
+                        background: "#0f0f1a",
                         color: "#e0e0e0",
-                        border: "1px solid #3a3a4e",
-                        borderRadius: 6,
+                        border: "1px solid #1e1e32",
+                        borderRadius: 8,
                         fontSize: 14,
                         boxSizing: "border-box",
                       }}
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>
+                    <label
+                      style={{ fontSize: 12, color: "#666", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}
+                    >
                       {t("end_time")}
                     </label>
                     <input
                       type="time"
                       value={schedule.work_end}
                       onChange={(e) =>
-                        setSchedule((prev) => ({
-                          ...prev,
-                          work_end: e.target.value,
-                        }))
+                        setSchedule((prev) => ({ ...prev, work_end: e.target.value }))
                       }
                       style={{
                         width: "100%",
                         padding: "8px 10px",
-                        background: "#2a2a3e",
+                        background: "#0f0f1a",
                         color: "#e0e0e0",
-                        border: "1px solid #3a3a4e",
-                        borderRadius: 6,
+                        border: "1px solid #1e1e32",
+                        borderRadius: 8,
                         fontSize: 14,
                         boxSizing: "border-box",
                       }}
@@ -487,7 +533,9 @@ export default function Settings() {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 6 }}>
+                  <label
+                    style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 8 }}
+                  >
                     {t("active_days")}
                   </label>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -502,12 +550,13 @@ export default function Settings() {
                             width: 32,
                             height: 32,
                             borderRadius: "50%",
-                            background: active ? "#ff8c00" : "#2a2a3e",
-                            color: active ? "#fff" : "#666",
+                            background: active ? "#ff8c00" : "#0f0f1a",
+                            border: `1.5px solid ${active ? "#ff8c00" : "#1e1e32"}`,
+                            color: active ? "#fff" : "#444",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: 600,
                             cursor: "pointer",
                             transition: "all 0.2s",
@@ -525,20 +574,20 @@ export default function Settings() {
         )}
       </div>
 
-      {/* Reset button */}
-      <div style={{ paddingTop: 20, paddingBottom: 12 }}>
+      {/* Reset */}
+      <div style={{ paddingTop: 16, paddingBottom: 12 }}>
         {showResetConfirm ? (
           <div
             style={{
-              padding: 12,
-              background: "rgba(255, 0, 0, 0.1)",
-              borderRadius: 8,
-              border: "1px solid rgba(255, 0, 0, 0.3)",
+              padding: 14,
+              background: "rgba(239,83,80,0.08)",
+              borderRadius: 14,
+              border: "1px solid rgba(239,83,80,0.2)",
               textAlign: "center",
             }}
           >
-            <div style={{ fontSize: 13, color: "#ff6666", marginBottom: 8 }}>
-              {t("reset_confirm")}
+            <div style={{ fontSize: 13, color: "#ef5350", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <AlertCircle size={14} /> {t("reset_confirm")}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button
@@ -546,10 +595,10 @@ export default function Settings() {
                 style={{
                   flex: 1,
                   padding: "8px 0",
-                  background: "#da3633",
+                  background: "#ef5350",
                   color: "#fff",
                   border: "none",
-                  borderRadius: 6,
+                  borderRadius: 8,
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: "pointer",
@@ -562,10 +611,10 @@ export default function Settings() {
                 style={{
                   flex: 1,
                   padding: "8px 0",
-                  background: "#2a2a3e",
-                  color: "#ccc",
+                  background: "#1e1e32",
+                  color: "#bbb",
                   border: "none",
-                  borderRadius: 6,
+                  borderRadius: 8,
                   fontSize: 13,
                   cursor: "pointer",
                 }}
@@ -581,18 +630,23 @@ export default function Settings() {
               width: "100%",
               padding: "10px 0",
               background: "transparent",
-              color: "#666",
-              border: "1px solid #2a2a3e",
-              borderRadius: 8,
+              color: "#555",
+              border: "1px solid #1e1e32",
+              borderRadius: 10,
               fontSize: 13,
               cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
               transition: "all 0.2s",
             }}
           >
-            {t("reset_all")}
+            <RotateCcw size={14} /> {t("reset_all")}
           </button>
         )}
       </div>
     </div>
   );
 }
+

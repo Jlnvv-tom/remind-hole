@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { Timer, Settings, BarChart3 } from "lucide-react";
 import BlackHoleCanvas from "./components/BlackHoleCanvas";
-import Settings from "./components/Settings";
+import SettingsPage from "./components/Settings";
 import Dashboard from "./components/Dashboard";
 import StatsPanel from "./components/StatsPanel";
 import Onboarding from "./components/Onboarding";
@@ -9,14 +10,12 @@ import AlertOverlay from "./components/AlertOverlay";
 import { isFirstRun, getAlertLevel } from "./services/tauri-api";
 import { useI18n } from "./i18n";
 
-// DevTools toggle (only works in dev mode)
+// DevTools toggle
 async function toggleDevtools() {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     await invoke("toggle_devtools");
-  } catch {
-    // Not in Tauri context
-  }
+  } catch {}
 }
 
 type WindowRole = "main" | "blackhole" | "preview";
@@ -29,7 +28,6 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const { t } = useI18n();
 
-  // Determine which Tauri window we're in
   useEffect(() => {
     const hash = window.location.hash;
     if (hash === "#settings") {
@@ -40,21 +38,14 @@ export default function App() {
       import("@tauri-apps/api/window")
         .then(({ getCurrentWindow }) => {
           const label = getCurrentWindow().label;
-          if (label === "blackhole") {
-            setWindowRole("blackhole");
-          } else if (label === "preview") {
-            setWindowRole("preview");
-          } else {
-            setWindowRole("main");
-          }
+          if (label === "blackhole") setWindowRole("blackhole");
+          else if (label === "preview") setWindowRole("preview");
+          else setWindowRole("main");
         })
-        .catch(() => {
-          setWindowRole("main");
-        });
+        .catch(() => setWindowRole("main"));
     }
   }, []);
 
-  // DevTools shortcut: Cmd/Ctrl + Shift + I
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "I") {
@@ -66,42 +57,25 @@ export default function App() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Check first run (main window only)
   useEffect(() => {
     if (windowRole !== "main") return;
     isFirstRun()
-      .then((first) => {
-        if (first) setShowOnboarding(true);
-      })
+      .then((first) => { if (first) setShowOnboarding(true); })
       .catch(() => {});
   }, [windowRole]);
 
-  // Poll alert level (blackhole/preview windows)
   useEffect(() => {
     if (windowRole === "main") return;
-
     const poll = setInterval(async () => {
-      try {
-        const level = await getAlertLevel();
-        setAlertLevel(level);
-      } catch {
-        // dev mode
-      }
+      try { setAlertLevel(await getAlertLevel()); } catch {}
     }, 2000);
-
     return () => clearInterval(poll);
   }, [windowRole]);
 
-  // Onboarding overlay (main window)
-  if (windowRole === "main" && showOnboarding) {
-    return <Onboarding />;
-  }
+  if (windowRole === "main" && showOnboarding) return <Onboarding />;
 
-  // Blackhole window — full screen overlay
   if (windowRole === "blackhole") {
-    if (alertLevel === "blackhole") {
-      return <BlackHoleCanvas />;
-    }
+    if (alertLevel === "blackhole") return <BlackHoleCanvas />;
     if (alertLevel === "green") return null;
     return (
       <>
@@ -111,54 +85,46 @@ export default function App() {
     );
   }
 
-  // Preview window — small floating indicator
   if (windowRole === "preview") {
     if (alertLevel === "green") return null;
     return <PreviewCanvas alertLevel={alertLevel} />;
   }
 
   // ==================== Main Window ====================
-  // Has bottom navigation: Dashboard | Settings | Stats
   return (
     <div
       style={{
         width: "100%",
         height: "100vh",
-        background: "#1a1a2e",
+        background: "#0f0f1a",
         color: "#e0e0e0",
         fontFamily: '"SF Pro Display", system-ui, sans-serif',
         display: "flex",
         flexDirection: "column",
       }}
     >
-      {/* Page content area */}
+      {/* Page content */}
       <div style={{ flex: 1, overflowY: "auto" }}>
         {mainPage === "dashboard" && <Dashboard />}
-        {mainPage === "settings" && <Settings />}
+        {mainPage === "settings" && <SettingsPage />}
         {mainPage === "stats" && (
-          <div style={{ padding: "28px 24px" }}>
-            <h2
-              style={{
-                fontSize: 18,
-                fontWeight: 700,
-                color: "#fff",
-                marginBottom: 20,
-              }}
-            >
-              📊 {t("stats_title")}
-            </h2>
+          <div style={{ padding: "24px 20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
+              <BarChart3 size={20} style={{ color: "#ff8c00" }} />
+              <h2 style={{ fontSize: 20, fontWeight: 700, color: "#fff", margin: 0 }}>
+                {t("stats_title")}
+              </h2>
+            </div>
             <StatsPanel />
           </div>
         )}
       </div>
 
-      {/* Bottom navigation bar */}
+      {/* Bottom navigation */}
       <BottomNav currentPage={mainPage} onNavigate={setMainPage} />
     </div>
   );
 }
-
-// --- Bottom Navigation Component ---
 
 function BottomNav({
   currentPage,
@@ -169,23 +135,25 @@ function BottomNav({
 }) {
   const { t } = useI18n();
 
-  const tabs: { key: MainPage; icon: string; labelKey: "nav_dashboard" | "nav_settings" | "nav_stats" }[] = [
-    { key: "dashboard", icon: "⏱️", labelKey: "nav_dashboard" },
-    { key: "settings", icon: "⚙️", labelKey: "nav_settings" },
-    { key: "stats", icon: "📊", labelKey: "nav_stats" },
+  const tabs: { key: MainPage; icon: typeof Timer; labelKey: "nav_dashboard" | "nav_settings" | "nav_stats" }[] = [
+    { key: "dashboard", icon: Timer, labelKey: "nav_dashboard" },
+    { key: "settings", icon: Settings, labelKey: "nav_settings" },
+    { key: "stats", icon: BarChart3, labelKey: "nav_stats" },
   ];
 
   return (
     <div
       style={{
         display: "flex",
-        borderTop: "1px solid #2a2a3e",
-        background: "#16162a",
+        borderTop: "1px solid #1e1e32",
+        background: "#0d0d18",
         flexShrink: 0,
+        paddingBottom: "env(safe-area-inset-bottom, 0)",
       }}
     >
       {tabs.map((tab) => {
         const isActive = currentPage === tab.key;
+        const Icon = tab.icon;
         return (
           <button
             key={tab.key}
@@ -200,8 +168,8 @@ function BottomNav({
               background: "transparent",
               border: "none",
               cursor: "pointer",
-              transition: "all 0.2s",
               position: "relative",
+              transition: "all 0.2s",
             }}
           >
             {isActive && (
@@ -209,30 +177,28 @@ function BottomNav({
                 style={{
                   position: "absolute",
                   top: 0,
-                  left: "20%",
-                  right: "20%",
+                  left: "25%",
+                  right: "25%",
                   height: 2,
                   background: "#ff8c00",
-                  borderRadius: "0 0 2 2",
+                  borderRadius: "0 0 2px 2px",
                 }}
               />
             )}
-            <span
+            <Icon
+              size={20}
               style={{
-                fontSize: 18,
-                lineHeight: 1,
-                marginBottom: 3,
-                transition: "transform 0.2s",
-                transform: isActive ? "scale(1.15)" : "scale(1)",
+                color: isActive ? "#ff8c00" : "#444",
+                transition: "color 0.2s, transform 0.2s",
+                transform: isActive ? "scale(1.1)" : "scale(1)",
               }}
-            >
-              {tab.icon}
-            </span>
+            />
             <span
               style={{
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: isActive ? 600 : 400,
-                color: isActive ? "#ff8c00" : "#666",
+                color: isActive ? "#ff8c00" : "#555",
+                marginTop: 3,
                 transition: "color 0.2s",
               }}
             >

@@ -2,6 +2,12 @@ import { useState, useEffect } from "react";
 import { getStats, type Stats } from "../services/tauri-api";
 import { useI18n } from "../i18n";
 import type { LocaleKey } from "../i18n/locales/zh-CN";
+import {
+  Flame,
+  Star,
+  TrendingUp,
+  CalendarDays,
+} from "lucide-react";
 
 const DAY_KEYS: LocaleKey[] = [
   "day_mon",
@@ -16,106 +22,223 @@ const DAY_KEYS: LocaleKey[] = [
 export default function StatsPanel() {
   const { t } = useI18n();
   const [stats, setStats] = useState<Stats>({
-    today_standups: 0,
+    today_stand_count: 0,
     streak_days: 0,
-    weekly_data: [0, 0, 0, 0, 0, 0, 0],
-    total_ignores: 0,
+    weekly_sitting_minutes: [0, 0, 0, 0, 0, 0, 0],
+    total_ignore_count: 0,
   });
+
+  const [animateIn, setAnimateIn] = useState(false);
 
   useEffect(() => {
     getStats()
       .then((s) => setStats(s))
       .catch(() => {});
+    // Trigger entrance animation
+    setTimeout(() => setAnimateIn(true), 50);
   }, []);
 
-  // Calculate this week vs last week
-  const thisWeekAvg = stats.weekly_data.length > 0
-    ? Math.round(stats.weekly_data.reduce((a, b) => a + b, 0) / stats.weekly_data.length)
-    : 0;
+  const weeklyData = stats.weekly_sitting_minutes;
+  const thisWeekAvg =
+    weeklyData.length > 0
+      ? Math.round(weeklyData.reduce((a, b) => a + b, 0) / weeklyData.length)
+      : 0;
 
-  // Heatmap color logic
+  // Max value for bar chart scaling
+  const maxMinutes = Math.max(...weeklyData, 1);
+
+  // Heatmap color
   const getHeatColor = (minutes: number): string => {
-    if (minutes === 0) return "#2a2a3e"; // 无数据 - gray
-    if (minutes <= 45) return "#2ea043"; // 按时起身 - green
-    return "#da3633"; // 超时 - red
+    if (minutes === 0) return "#1e1e32";
+    if (minutes <= 45) return "#4caf50";
+    if (minutes <= 90) return "#ffb300";
+    return "#ef5350";
   };
 
-  return (
-    <div style={{ paddingTop: 4 }}>
-      <h3 style={{ fontSize: 14, color: "#888", marginBottom: 12, fontWeight: 600 }}>
-        {t("stats_title")}
-      </h3>
+  const getHeatGlow = (minutes: number): string => {
+    if (minutes === 0) return "none";
+    if (minutes <= 45) return "0 0 8px rgba(76,175,80,0.3)";
+    if (minutes <= 90) return "0 0 8px rgba(255,179,0,0.3)";
+    return "0 0 8px rgba(239,83,80,0.3)";
+  };
 
+  const statCards = [
+    {
+      icon: Flame,
+      value: stats.today_stand_count,
+      label: t("today_standups"),
+      color: "#ff8c00",
+      bg: "#ff8c0012",
+    },
+    {
+      icon: Star,
+      value: stats.streak_days,
+      label: t("streak_days"),
+      color: "#ffb300",
+      bg: "#ffb30012",
+    },
+    {
+      icon: TrendingUp,
+      value: thisWeekAvg,
+      label: t("weekly_avg"),
+      color: "#64b5f6",
+      bg: "#64b5f612",
+    },
+  ];
+
+  return (
+    <div
+      style={{
+        paddingTop: 0,
+        opacity: animateIn ? 1 : 0,
+        transform: animateIn ? "translateY(0)" : "translateY(12px)",
+        transition: "all 0.4s ease",
+      }}
+    >
+      {/* Stat cards */}
       <div
         style={{
-          display: "flex",
-          gap: 16,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: 10,
+          marginBottom: 20,
+        }}
+      >
+        {statCards.map((card) => (
+          <div
+            key={card.label}
+            style={{
+              padding: "14px 10px",
+              background: card.bg,
+              borderRadius: 14,
+              border: `1px solid ${card.color}20`,
+              textAlign: "center",
+              transition: "transform 0.2s",
+            }}
+          >
+            <card.icon size={18} style={{ color: card.color, marginBottom: 4 }} />
+            <div
+              style={{
+                fontSize: 24,
+                fontWeight: 800,
+                color: card.color,
+                fontFamily: '"SF Mono", monospace',
+                lineHeight: 1.1,
+              }}
+            >
+              {card.value}
+            </div>
+            <div style={{ fontSize: 10, color: "#666", marginTop: 3 }}>{card.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* 7-day bar chart */}
+      <div
+        style={{
+          padding: "16px",
+          background: "#13132a",
+          borderRadius: 14,
+          border: "1px solid #1e1e32",
           marginBottom: 16,
         }}
       >
-        <div style={{ flex: 1, textAlign: "center" }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#ff8c00" }}>
-            {stats.today_standups}
-          </div>
-          <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{t("today_standups")}</div>
+        <div
+          style={{
+            fontSize: 12,
+            color: "#666",
+            marginBottom: 12,
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          <CalendarDays size={12} /> {t("seven_day_record")}
         </div>
-        <div style={{ flex: 1, textAlign: "center" }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#4caf50" }}>
-            {stats.streak_days}
-          </div>
-          <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{t("streak_days")}</div>
-        </div>
-        <div style={{ flex: 1, textAlign: "center" }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#64b5f6" }}>
-            {thisWeekAvg}
-          </div>
-          <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{t("weekly_avg")}</div>
-        </div>
-      </div>
 
-      {/* 7-day heatmap */}
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>{t("seven_day_record")}</div>
-        <div style={{ display: "flex", gap: 4 }}>
-          {stats.weekly_data.map((minutes, i) => (
-            <div key={i} style={{ textAlign: "center" }}>
+        {/* Bar chart */}
+        <div style={{ display: "flex", gap: 6, alignItems: "flex-end", height: 80 }}>
+          {weeklyData.map((minutes, i) => {
+            const height = minutes > 0 ? Math.max((minutes / maxMinutes) * 64, 8) : 4;
+            return (
               <div
+                key={i}
                 style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 4,
-                  backgroundColor: getHeatColor(minutes),
+                  flex: 1,
                   display: "flex",
+                  flexDirection: "column",
                   alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 10,
-                  color: minutes === 0 ? "#555" : "#fff",
-                  fontWeight: 600,
+                  gap: 4,
                 }}
               >
-                {minutes > 0 ? `${minutes}'` : "—"}
+                <span
+                  style={{
+                    fontSize: 9,
+                    color: minutes > 0 ? "#aaa" : "#444",
+                    fontFamily: '"SF Mono", monospace',
+                  }}
+                >
+                  {minutes > 0 ? `${minutes}'` : ""}
+                </span>
+                <div
+                  style={{
+                    width: "100%",
+                    height,
+                    borderRadius: 4,
+                    background: getHeatColor(minutes),
+                    boxShadow: getHeatGlow(minutes),
+                    transition: "height 0.5s ease",
+                  }}
+                />
+                <span style={{ fontSize: 9, color: "#555" }}>{t(DAY_KEYS[i])}</span>
               </div>
-              <div style={{ fontSize: 10, color: "#555", marginTop: 3 }}>
-                {t(DAY_KEYS[i])}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
       {/* Legend */}
-      <div style={{ display: "flex", gap: 12, fontSize: 10, color: "#666" }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 16,
+          fontSize: 10,
+          color: "#555",
+          justifyContent: "center",
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <div style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: "#2ea043" }} />
+          <div
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 2,
+              background: "#4caf50",
+            }}
+          />
           <span>{t("on_time")}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <div style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: "#da3633" }} />
+          <div
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 2,
+              background: "#ffb300",
+            }}
+          />
           <span>{t("overtime")}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <div style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: "#2a2a3e" }} />
-          <span>{t("no_data")}</span>
+          <div
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 2,
+              background: "#ef5350",
+            }}
+          />
+          <span>{t("overtime")}+</span>
         </div>
       </div>
     </div>
